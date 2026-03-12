@@ -33,6 +33,14 @@ struct ScriptAssistantView: View {
         }
         .frame(minWidth: 750, minHeight: 500)
         .navigationTitle("Script Assistant -- \(script.name)")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.glass)
+            }
+        }
         .alert("Provider Unavailable", isPresented: $showingProviderError) {
             Button("OK") {}
         } message: {

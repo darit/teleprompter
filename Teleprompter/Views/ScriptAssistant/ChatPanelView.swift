@@ -36,34 +36,26 @@ struct ChatPanelView: View {
                         }
 
                         if conversation.isStreaming {
-                            HStack {
-                                Text(conversation.currentStreamingText.isEmpty
-                                     ? "Thinking..."
-                                     : conversation.currentStreamingText)
-                                    .font(.system(size: 13))
-                                    .lineSpacing(4)
-                                    .padding(12)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.primary.opacity(0.04))
-                                    }
-                                    .frame(maxWidth: 500, alignment: .leading)
-
-                                Spacer(minLength: 60)
-                            }
-                            .id("streaming")
+                            streamingBubble
+                                .id("streaming")
                         }
+
+                        // Invisible anchor at the very bottom
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
                     .padding(16)
                 }
+                .defaultScrollAnchor(.bottom)
                 .onChange(of: conversation.messages.count) {
                     withAnimation {
-                        proxy.scrollTo(conversation.messages.last?.id, anchor: .bottom)
+                        proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
                 .onChange(of: conversation.currentStreamingText) {
                     if conversation.isStreaming {
-                        proxy.scrollTo("streaming", anchor: .bottom)
+                        proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
             }
@@ -105,6 +97,31 @@ struct ChatPanelView: View {
         .onAppear {
             isInputFocused = true
         }
+    }
+
+    private var streamingBubble: some View {
+        HStack {
+            let displayText = conversation.currentStreamingText.isEmpty
+                ? "Thinking..."
+                : conversation.currentStreamingText
+
+            Text(attributedMarkdown(displayText))
+                .font(.system(size: 13))
+                .lineSpacing(4)
+                .textSelection(.enabled)
+                .padding(12)
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.04))
+                }
+                .frame(maxWidth: 500, alignment: .leading)
+
+            Spacer(minLength: 60)
+        }
+    }
+
+    private func attributedMarkdown(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
 
     private func sendMessage() {
