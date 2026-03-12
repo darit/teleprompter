@@ -12,7 +12,7 @@ import SwiftData
 struct TeleprompterApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView() // will be replaced with ScriptManagerView in Task 11
+            ScriptManagerView()
         }
         .modelContainer(for: [Script.self, ScriptSection.self])
     }
