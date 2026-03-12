@@ -5,12 +5,16 @@ import UniformTypeIdentifiers
 
 struct ScriptManagerView: View {
     @State private var selectedScript: Script?
-    @State private var showingAssistant = false
-    @State private var assistantScript: Script?
-    @State private var assistantSlides: [SlideContent] = []
+    @State private var assistantData: AssistantData?
     @State private var importError: String?
     @State private var showingImportError = false
     @Environment(\.modelContext) private var modelContext
+
+    struct AssistantData: Identifiable {
+        let id = UUID()
+        let script: Script
+        let slides: [SlideContent]
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -34,11 +38,9 @@ struct ScriptManagerView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 450)
-        .sheet(isPresented: $showingAssistant) {
-            if let script = assistantScript {
-                ScriptAssistantView(script: script, slides: assistantSlides)
-                    .frame(minWidth: 800, minHeight: 600)
-            }
+        .sheet(item: $assistantData) { data in
+            ScriptAssistantView(script: data.script, slides: data.slides)
+                .frame(minWidth: 800, idealWidth: 900, minHeight: 600, idealHeight: 700)
         }
         .alert("Import Error", isPresented: $showingImportError) {
             Button("OK") {}
@@ -76,9 +78,7 @@ struct ScriptManagerView: View {
             selectedScript = script
 
             // Open assistant with slides
-            assistantSlides = result.slides
-            assistantScript = script
-            showingAssistant = true
+            assistantData = AssistantData(script: script, slides: result.slides)
 
             if !result.warnings.isEmpty {
                 importError = "Imported with warnings:\n" + result.warnings.joined(separator: "\n")
@@ -91,8 +91,7 @@ struct ScriptManagerView: View {
     }
 
     private func openAssistant(for script: Script) {
-        // Build SlideContent from existing sections
-        assistantSlides = script.sortedSections.map { section in
+        let slides = script.sortedSections.map { section in
             SlideContent(
                 slideNumber: section.slideNumber,
                 title: section.label,
@@ -100,8 +99,7 @@ struct ScriptManagerView: View {
                 notes: ""
             )
         }
-        assistantScript = script
-        showingAssistant = true
+        assistantData = AssistantData(script: script, slides: slides)
     }
 }
 
