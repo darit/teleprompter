@@ -45,6 +45,7 @@ class Script {
     var modifiedAt: Date
     var scrollSpeed: Double
     var fontSize: Double
+    var targetDuration: Double?  // desired talk length in seconds (e.g. 900 for 15 min); nil = no target
 }
 
 @Model
@@ -128,7 +129,7 @@ The main window. Uses `NavigationSplitView` with a sidebar and detail area.
 A split-view chat interface for collaboratively building a speech script from slide content.
 
 ### Left Panel: Chat
-- Context bar at top: number of slides loaded, active model name, "Attach context" button
+- Context bar at top: number of slides loaded, active model name, target duration selector (e.g. "15 min talk"), "Attach context" button
 - Chat messages in bubbles:
   - AI messages: left-aligned, neutral glass bubble
   - User messages: right-aligned, subtle tinted bubble
@@ -149,13 +150,13 @@ A split-view chat interface for collaboratively building a speech script from sl
     - Amber "asking about this...": AI is currently asking about this slide
     - Gray "Waiting for context...": not yet addressed
   - Generated text for completed slides
-- Progress bar at bottom: "X of Y slides ready", visual progress bar, estimated duration
+- Progress bar at bottom: "X of Y slides ready", visual progress bar, estimated duration vs target (e.g. "~12 min / 15 min target")
 
 ### Flow
 1. User clicks "Import" in Script Manager and selects a PPTX file
 2. App extracts text from all slides (ZIP + XML parsing)
-3. Script Assistant opens with slide content loaded as LLM context
-4. LLM analyzes slides and begins asking questions about the first slide that needs enrichment
+3. Script Assistant opens with slide content loaded as LLM context; user sets target duration (optional)
+4. LLM analyzes slides, notes the target duration, and begins asking questions about the first slide that needs enrichment
 5. User responds with additional context, the LLM generates/refines that slide's script
 6. LLM moves to the next slide, repeating the process
 7. User can skip slides, go back, or manually edit the preview at any time
@@ -381,11 +382,13 @@ Invokes the GitHub Copilot CLI as a subprocess to leverage a Copilot subscriptio
 The system prompt for script generation:
 
 1. Provides all slide content as context
-2. Instructs the model to act as a presentation coach
-3. Model should ask questions one slide at a time to gather additional context
-4. Model generates natural speech text (not bullet points, not formal writing)
-5. Model should suggest mentioning team members, concrete numbers, and anecdotes
-6. Output should be conversational and match the presenter's speaking style
+2. Provides target duration if set (e.g. "The presenter wants this talk to be ~15 minutes"); model budgets time across slides proportionally to content density
+3. Instructs the model to act as a presentation coach
+4. Model should ask questions one slide at a time to gather additional context
+5. Model generates natural speech text (not bullet points, not formal writing)
+6. Model should suggest mentioning team members, concrete numbers, and anecdotes
+7. Output should be conversational and match the presenter's speaking style
+8. If a target duration is set, model flags when the running total is trending over/under and suggests trimming or expanding specific slides
 
 ---
 
