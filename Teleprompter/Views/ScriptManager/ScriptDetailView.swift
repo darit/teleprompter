@@ -44,14 +44,12 @@ struct ScriptDetailView: View {
                     Button("Refine with AI") {
                         // Plan 2: open Script Assistant
                     }
-                    // TODO: Use .buttonStyle(.glass) when targeting macOS Tahoe
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
 
                     Button("Present") {
                         // Plan 3: launch teleprompter
                     }
-                    // TODO: Use .buttonStyle(.glass) when targeting macOS Tahoe
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                     .tint(.accentColor)
                 }
             }
@@ -101,14 +99,12 @@ struct ScriptDetailView: View {
                     Button { adjustFontSize(-1) } label: {
                         Text("A-").font(.system(size: 10))
                     }
-                    // TODO: Use .buttonStyle(.glass) when targeting macOS Tahoe
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
 
                     Button { adjustFontSize(1) } label: {
                         Text("A+").font(.system(size: 10))
                     }
-                    // TODO: Use .buttonStyle(.glass) when targeting macOS Tahoe
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
             }
             .font(.system(size: 10))
