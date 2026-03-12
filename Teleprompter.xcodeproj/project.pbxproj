@@ -29,14 +29,39 @@
 		18C82A992F6342FF00C2E6F9 /* TeleprompterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TeleprompterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA000001AA000001AA000001 /* Exceptions for "Teleprompter" folder in "Teleprompter" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/CLAUDE.md,
+				Utilities/CLAUDE.md,
+			);
+			target = 18C82A7F2F6342FD00C2E6F9 /* Teleprompter */;
+		};
+		AA000002AA000002AA000002 /* Exceptions for "TeleprompterTests" folder in "TeleprompterTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CLAUDE.md,
+				Models/CLAUDE.md,
+			);
+			target = 18C82A8E2F6342FF00C2E6F9 /* TeleprompterTests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		18C82A822F6342FD00C2E6F9 /* Teleprompter */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA000001AA000001AA000001 /* Exceptions for "Teleprompter" folder in "Teleprompter" target */,
+			);
 			path = Teleprompter;
 			sourceTree = "<group>";
 		};
 		18C82A922F6342FF00C2E6F9 /* TeleprompterTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA000002AA000002AA000002 /* Exceptions for "TeleprompterTests" folder in "TeleprompterTests" target */,
+			);
 			path = TeleprompterTests;
 			sourceTree = "<group>";
 		};
