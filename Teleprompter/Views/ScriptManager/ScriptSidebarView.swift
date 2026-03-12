@@ -7,6 +7,7 @@ struct ScriptSidebarView: View {
     @Binding var selectedScript: Script?
     @Environment(\.modelContext) private var modelContext
     @State private var searchText = ""
+    var onImport: () -> Void = {}
 
     private var filteredScripts: [Script] {
         if searchText.isEmpty { return scripts }
@@ -20,7 +21,7 @@ struct ScriptSidebarView: View {
                 Button("+ New") { createNewScript() }
                     .buttonStyle(.glass)
 
-                Button("Import") { /* Plan 2: PPTX import */ }
+                Button("Import") { onImport() }
                     .buttonStyle(.glass)
             }
             .padding(.horizontal, 12)
@@ -67,7 +68,7 @@ struct ScriptSidebarView: View {
 }
 
 #Preview {
-    ScriptSidebarView(selectedScript: .constant(nil))
+    ScriptSidebarView(selectedScript: .constant(nil), onImport: {})
         .modelContainer(PreviewSampleData.container)
         .frame(width: 220)
 }

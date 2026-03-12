@@ -5,6 +5,7 @@ import SwiftData
 struct ScriptDetailView: View {
     @Bindable var script: Script
     @State private var isEditingName = false
+    var onRefineWithAI: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -42,7 +43,7 @@ struct ScriptDetailView: View {
 
                 HStack(spacing: 8) {
                     Button("Refine with AI") {
-                        // Plan 2: open Script Assistant
+                        onRefineWithAI()
                     }
                     .buttonStyle(.glass)
 
@@ -127,7 +128,7 @@ struct ScriptDetailView: View {
 }
 
 #Preview {
-    ScriptDetailView(script: PreviewSampleData.sampleScript())
+    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {})
         .modelContainer(PreviewSampleData.container)
         .frame(width: 700, height: 500)
 }
