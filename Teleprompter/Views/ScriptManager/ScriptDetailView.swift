@@ -6,6 +6,7 @@ struct ScriptDetailView: View {
     @Bindable var script: Script
     @State private var isEditingName = false
     var onRefineWithAI: () -> Void = {}
+    var onPresent: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,7 +49,7 @@ struct ScriptDetailView: View {
                     .buttonStyle(.glass)
 
                     Button("Present") {
-                        // Plan 3: launch teleprompter
+                        onPresent()
                     }
                     .buttonStyle(.glass)
                 }
@@ -128,7 +129,7 @@ struct ScriptDetailView: View {
 }
 
 #Preview {
-    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {})
+    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {}, onPresent: {})
         .modelContainer(PreviewSampleData.container)
         .frame(width: 700, height: 500)
 }

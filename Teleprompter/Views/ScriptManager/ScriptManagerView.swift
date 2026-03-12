@@ -27,7 +27,8 @@ struct ScriptManagerView: View {
             if let script = selectedScript {
                 ScriptDetailView(
                     script: script,
-                    onRefineWithAI: { openAssistant(for: script) }
+                    onRefineWithAI: { openAssistant(for: script) },
+                    onPresent: { launchTeleprompter(for: script) }
                 )
             } else {
                 ContentUnavailableView(
@@ -88,6 +89,13 @@ struct ScriptManagerView: View {
             importError = error.localizedDescription
             showingImportError = true
         }
+    }
+
+    private func launchTeleprompter(for script: Script) {
+        guard !script.sections.isEmpty else { return }
+        let state = TeleprompterState.from(script: script)
+        TeleprompterWindowController.shared.show(state: state)
+        GlobalShortcutManager.shared.start(state: state)
     }
 
     private func openAssistant(for script: Script) {
