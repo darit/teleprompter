@@ -2,7 +2,7 @@
 import SwiftUI
 
 struct SlideSectionView: View {
-    let section: ScriptSection
+    @Bindable var section: ScriptSection
     var fontSize: Double = 13
 
     var body: some View {
@@ -31,12 +31,13 @@ struct SlideSectionView: View {
                 .foregroundStyle(.quaternary)
             }
 
-            Text(section.content)
+            TextEditor(text: $section.content)
                 .font(.system(size: fontSize))
                 .foregroundStyle(.secondary)
                 .lineSpacing(6)
+                .scrollContentBackground(.hidden)
                 .padding(.leading, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         }
     }
 }

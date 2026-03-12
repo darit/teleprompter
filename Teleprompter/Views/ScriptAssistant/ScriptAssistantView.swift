@@ -14,37 +14,39 @@ struct ScriptAssistantView: View {
     @State private var showingProviderError = false
 
     var body: some View {
-        Group {
-            if let conversation {
-                HSplitView {
-                    ChatPanelView(conversation: conversation)
-                        .frame(minWidth: 350, idealWidth: 450)
+        NavigationStack {
+            Group {
+                if let conversation {
+                    HSplitView {
+                        ChatPanelView(conversation: conversation)
+                            .frame(minWidth: 350, idealWidth: 450)
 
-                    ScriptPreviewPanel(
-                        script: script,
-                        totalSlides: slides.count,
-                        targetDurationMinutes: targetMinutes
-                    )
-                    .frame(minWidth: 300, idealWidth: 350)
+                        ScriptPreviewPanel(
+                            script: script,
+                            totalSlides: slides.count,
+                            targetDurationMinutes: targetMinutes
+                        )
+                        .frame(minWidth: 300, idealWidth: 350)
+                    }
+                } else {
+                    startView
                 }
-            } else {
-                startView
             }
-        }
-        .frame(minWidth: 750, minHeight: 500)
-        .navigationTitle("Script Assistant -- \(script.name)")
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
+            .frame(minWidth: 750, minHeight: 500)
+            .navigationTitle("Script Assistant -- \(script.name)")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .buttonStyle(.glass)
                 }
-                .buttonStyle(.glass)
             }
-        }
-        .alert("Provider Unavailable", isPresented: $showingProviderError) {
-            Button("OK") {}
-        } message: {
-            Text(providerError ?? "")
+            .alert("Provider Unavailable", isPresented: $showingProviderError) {
+                Button("OK") {}
+            } message: {
+                Text(providerError ?? "")
+            }
         }
     }
 
