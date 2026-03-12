@@ -50,7 +50,6 @@ struct ScriptDetailView: View {
                         // Plan 3: launch teleprompter
                     }
                     .buttonStyle(.glass)
-                    .tint(.accentColor)
                 }
             }
             .padding(.horizontal, 24)
