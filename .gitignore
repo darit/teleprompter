@@ -1,1 +1,5 @@
 .superpowers/
+# Prevent claude-mem CLAUDE.md files from breaking Xcode builds
+Teleprompter/CLAUDE.md
+Teleprompter/**/CLAUDE.md
+TeleprompterTests/**/CLAUDE.md
