@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SlideSectionView: View {
     let section: ScriptSection
+    var fontSize: Double = 13
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -31,7 +32,7 @@ struct SlideSectionView: View {
             }
 
             Text(section.content)
-                .font(.system(size: 13))
+                .font(.system(size: fontSize))
                 .foregroundStyle(.secondary)
                 .lineSpacing(6)
                 .padding(.leading, 4)

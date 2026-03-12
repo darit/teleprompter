@@ -65,7 +65,7 @@ struct ScriptDetailView: View {
                         if index > 0 {
                             Divider().padding(.vertical, 4)
                         }
-                        SlideSectionView(section: section)
+                        SlideSectionView(section: section, fontSize: script.fontSize)
                     }
 
                     if script.sections.isEmpty {
@@ -94,7 +94,7 @@ struct ScriptDetailView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Text("Font size")
+                    Text("Font \(Int(script.fontSize))pt")
                     Button { adjustFontSize(-1) } label: {
                         Text("A-").font(.system(size: 10))
                     }
