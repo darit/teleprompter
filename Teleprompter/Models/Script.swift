@@ -5,6 +5,7 @@ import SwiftData
 final class Script {
     var name: String
     @Relationship(deleteRule: .cascade) var sections: [ScriptSection]
+    @Relationship(deleteRule: .cascade) var chatHistory: [PersistedChatMessage]
     var createdAt: Date
     var modifiedAt: Date
     var scrollSpeed: Double
@@ -18,12 +19,14 @@ final class Script {
     init(
         name: String,
         sections: [ScriptSection] = [],
-        scrollSpeed: Double = 1.0,
+        chatHistory: [PersistedChatMessage] = [],
+        scrollSpeed: Double = 150.0,
         fontSize: Double = 16.0,
         targetDuration: Double? = nil
     ) {
         self.name = name
         self.sections = sections
+        self.chatHistory = chatHistory
         self.createdAt = Date.now
         self.modifiedAt = Date.now
         self.scrollSpeed = scrollSpeed

@@ -10,13 +10,20 @@ final class ScriptSection {
     var accentColorHex: String
     var isAIRefined: Bool
 
+    /// Original slide body text extracted from the PPTX file.
+    var originalBodyText: String = ""
+    /// Original speaker notes extracted from the PPTX file.
+    var originalNotes: String = ""
+
     init(
         slideNumber: Int,
         label: String,
         content: String,
         order: Int,
         accentColorHex: String,
-        isAIRefined: Bool = false
+        isAIRefined: Bool = false,
+        originalBodyText: String = "",
+        originalNotes: String = ""
     ) {
         self.slideNumber = slideNumber
         self.label = label
@@ -24,5 +31,17 @@ final class ScriptSection {
         self.order = order
         self.accentColorHex = accentColorHex
         self.isAIRefined = isAIRefined
+        self.originalBodyText = originalBodyText
+        self.originalNotes = originalNotes
+    }
+
+    /// Reconstruct a SlideContent from the persisted original PPTX data.
+    func toSlideContent() -> SlideContent {
+        SlideContent(
+            slideNumber: slideNumber,
+            title: label,
+            bodyText: originalBodyText,
+            notes: originalNotes
+        )
     }
 }

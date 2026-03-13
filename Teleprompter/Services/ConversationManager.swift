@@ -10,6 +10,9 @@ final class ConversationManager {
     var error: String?
     var activelyStreamingSlideNumber: Int?
 
+    /// Called when script sections are updated (for preview refresh).
+    var onSectionsChanged: (() -> Void)?
+
     private var streamingTask: Task<Void, Never>?
 
     private(set) var provider: any LLMProvider
@@ -84,7 +87,7 @@ final class ConversationManager {
                 let segments = Self.parseResponse(partial)
                 for segment in segments {
                     if case .script(let slideNumber) = segment.type {
-                        updateScriptSection(slideNumber: slideNumber, content: segment.content)
+                        updateScriptSection(slideNumber: slideNumber, content: segment.content, updateTimestamp: true)
                     }
                 }
             }
@@ -92,6 +95,21 @@ final class ConversationManager {
             isStreaming = false
             activelyStreamingSlideNumber = nil
         }
+    }
+
+    @MainActor
+    func deleteMessage(_ message: ChatMessage) {
+        guard let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        messages.remove(at: index)
+
+        // Remove from persistence
+        if let persisted = script.chatHistory.first(where: {
+            $0.role == message.role.rawValue && $0.content == message.content
+        }) {
+            modelContext.delete(persisted)
+            script.chatHistory.removeAll { $0 === persisted }
+        }
+        try? modelContext.save()
     }
 
     @MainActor
@@ -115,6 +133,14 @@ final class ConversationManager {
     }
 
     @MainActor
+    func generateSlide(_ slideNumber: Int) async {
+        let slide = slides.first { $0.slideNumber == slideNumber }
+        let slideTitle = slide?.title ?? "Slide \(slideNumber)"
+        let prompt = "Generate the teleprompter script for slide \(slideNumber) (\(slideTitle)). Use the slide content, speaker notes, and our conversation so far as context. Output only the script block for this slide."
+        await send(prompt)
+    }
+
+    @MainActor
     func regenerateLastResponse() async {
         removeLastAssistantMessage()
         await streamResponse()
@@ -129,17 +155,30 @@ final class ConversationManager {
         streamingTask = Task {
             do {
                 let stream = try await provider.stream(messages: messages)
+                var buffer = ""
+                var lastPreviewUpdate = Date.distantPast
 
                 for await chunk in stream {
                     if Task.isCancelled { break }
-                    currentStreamingText += chunk
+                    buffer += chunk
+                    currentStreamingText = buffer
 
-                    // Live parsing for streaming preview
-                    let parseResult = Self.parseStreamingBuffer(currentStreamingText)
-                    activelyStreamingSlideNumber = parseResult.activeSlideNumber
-                    if let slideNum = parseResult.activeSlideNumber, let partial = parseResult.partialContent {
-                        updateScriptSection(slideNumber: slideNum, content: partial)
+                    // Throttle live preview parsing to at most every 300ms
+                    let now = Date()
+                    if now.timeIntervalSince(lastPreviewUpdate) >= 0.3 {
+                        lastPreviewUpdate = now
+                        let parseResult = Self.parseStreamingBuffer(buffer)
+                        activelyStreamingSlideNumber = parseResult.activeSlideNumber
+                        if let slideNum = parseResult.activeSlideNumber, let partial = parseResult.partialContent {
+                            updateScriptSection(slideNumber: slideNum, content: partial)
+                        }
                     }
+                }
+
+                // Final parse after stream ends
+                let finalParse = Self.parseStreamingBuffer(buffer)
+                if let slideNum = finalParse.activeSlideNumber, let partial = finalParse.partialContent {
+                    updateScriptSection(slideNumber: slideNum, content: partial)
                 }
 
                 guard !Task.isCancelled else { return }
@@ -153,7 +192,7 @@ final class ConversationManager {
                 let segments = Self.parseResponse(response)
                 for segment in segments {
                     if case .script(let slideNumber) = segment.type {
-                        updateScriptSection(slideNumber: slideNumber, content: segment.content)
+                        updateScriptSection(slideNumber: slideNumber, content: segment.content, updateTimestamp: true)
                     }
                 }
 
@@ -176,14 +215,14 @@ final class ConversationManager {
         let persisted = PersistedChatMessage.from(message, order: order)
         script.chatHistory.append(persisted)
         script.modifiedAt = .now
+        try? modelContext.save()
     }
 
-    private func updateScriptSection(slideNumber: Int, content: String) {
+    private func updateScriptSection(slideNumber: Int, content: String, updateTimestamp: Bool = false) {
         if let existing = script.sections.first(where: { $0.slideNumber == slideNumber }) {
             existing.content = content
             existing.isAIRefined = true
         } else {
-            // Find matching slide for label
             let slide = slides.first { $0.slideNumber == slideNumber }
             let accentColors = ["#4A9EFF", "#34C759", "#FF9500", "#FF2D55", "#AF52DE", "#5AC8FA", "#FFCC00", "#FF6B35"]
             let colorIndex = (slideNumber - 1) % accentColors.count
@@ -198,7 +237,10 @@ final class ConversationManager {
             )
             script.sections.append(section)
         }
-        script.modifiedAt = .now
+        if updateTimestamp {
+            script.modifiedAt = .now
+            onSectionsChanged?()
+        }
     }
 
     // MARK: - Response Parsing (internal for testing)

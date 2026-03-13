@@ -14,7 +14,7 @@ struct TeleprompterStateTests {
         #expect(state.scrollOffset == 0)
         #expect(state.currentSectionIndex == 0)
         #expect(state.opacity == 1.0)
-        #expect(state.isClickThrough == true)
+        #expect(state.isClickThrough == false)
     }
 
     @Test("play and pause toggle")
@@ -102,13 +102,13 @@ struct TeleprompterStateTests {
     @Test("click-through toggle")
     func testClickThrough() {
         let state = TeleprompterState(sections: sampleSections(), fontSize: 24, scrollSpeed: 1.0)
-        #expect(state.isClickThrough == true)
-
-        state.toggleClickThrough()
         #expect(state.isClickThrough == false)
 
         state.toggleClickThrough()
         #expect(state.isClickThrough == true)
+
+        state.toggleClickThrough()
+        #expect(state.isClickThrough == false)
     }
 
     @Test("full script text concatenates sections")

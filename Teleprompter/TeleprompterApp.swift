@@ -11,9 +11,9 @@ import SwiftData
 @main
 struct TeleprompterApp: App {
     var body: some Scene {
-        WindowGroup {
+        Window("Teleprompter", id: "main") {
             ScriptManagerView()
         }
-        .modelContainer(for: [Script.self, ScriptSection.self])
+        .modelContainer(for: [Script.self, ScriptSection.self, PersistedChatMessage.self])
     }
 }

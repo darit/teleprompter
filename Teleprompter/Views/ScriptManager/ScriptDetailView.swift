@@ -6,6 +6,7 @@ struct ScriptDetailView: View {
     @Bindable var script: Script
     @State private var isEditingName = false
     var onRefineWithAI: () -> Void = {}
+    var onUpdatePPTX: () -> Void = {}
     var onPresent: () -> Void = {}
 
     var body: some View {
@@ -31,7 +32,7 @@ struct ScriptDetailView: View {
                         Text("\(script.sections.count) slides")
                         Text("--")
                             .foregroundStyle(.quaternary)
-                        Text("Modified \(script.modifiedAt, style: .relative)")
+                        Text("Modified \(script.modifiedAt, format: .relative(presentation: .named))")
                         Text("--")
                             .foregroundStyle(.quaternary)
                         Text(ReadTimeEstimator.formatDuration(totalDuration))
@@ -43,6 +44,14 @@ struct ScriptDetailView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
+                    Button {
+                        onUpdatePPTX()
+                    } label: {
+                        Label("Update PPTX", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.glass)
+                    .help("Re-import slides from an updated PowerPoint file")
+
                     Button("Refine with AI") {
                         onRefineWithAI()
                     }
@@ -62,7 +71,7 @@ struct ScriptDetailView: View {
 
             // Script sections
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 22) {
                     ForEach(Array(script.sortedSections.enumerated()), id: \.element.id) { index, section in
                         if index > 0 {
                             Divider().padding(.vertical, 4)
@@ -90,7 +99,7 @@ struct ScriptDetailView: View {
                     Text("|").foregroundStyle(.quaternary)
                     Text(ReadTimeEstimator.formatDuration(totalDuration) + " total")
                     Text("|").foregroundStyle(.quaternary)
-                    Text("Speed: \(String(format: "%.1f", script.scrollSpeed))x")
+                    Text("\(Int(script.scrollSpeed < 10 ? 120 : script.scrollSpeed)) WPM")
                 }
 
                 Spacer()
@@ -129,7 +138,7 @@ struct ScriptDetailView: View {
 }
 
 #Preview {
-    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {}, onPresent: {})
+    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {}, onUpdatePPTX: {}, onPresent: {})
         .modelContainer(PreviewSampleData.container)
         .frame(width: 700, height: 500)
 }

@@ -3,7 +3,8 @@ import AppKit
 final class GlobalShortcutManager {
     static let shared = GlobalShortcutManager()
 
-    private var monitor: Any?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
     private weak var state: TeleprompterState?
 
     private init() {}
@@ -12,25 +13,39 @@ final class GlobalShortcutManager {
         self.state = state
         stop()
 
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Global monitor: fires when app is NOT focused (e.g. PowerPoint is in front)
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyEvent(event)
+        }
+
+        // Local monitor: fires when app IS focused (teleprompter window is key)
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if self?.handleKeyEvent(event) == true {
+                return nil // consume the event
+            }
+            return event
         }
     }
 
     func stop() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
         }
-        monitor = nil
+        globalMonitor = nil
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+        localMonitor = nil
     }
 
-    private func handleKeyEvent(_ event: NSEvent) {
-        guard let state else { return }
+    @discardableResult
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        guard let state else { return false }
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let isCmdShift = flags == [.command, .shift]
 
-        guard isCmdShift else { return }
+        guard isCmdShift else { return false }
 
         switch event.keyCode {
         case 17: // T
@@ -45,6 +60,10 @@ final class GlobalShortcutManager {
             state.jumpBackward()
         case 124: // Right arrow
             state.jumpForward()
+        case 24: // + (equals key)
+            state.increaseFontSize()
+        case 27: // - (minus key)
+            state.decreaseFontSize()
         case 37: // L
             state.toggleClickThrough()
             TeleprompterWindowController.shared.updateClickThrough()
@@ -55,7 +74,8 @@ final class GlobalShortcutManager {
             state.increaseOpacity()
             TeleprompterWindowController.shared.updateOpacity()
         default:
-            break
+            return false
         }
+        return true
     }
 }

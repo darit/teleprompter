@@ -30,7 +30,7 @@ enum PreviewSampleData {
 
     static var container: ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try! ModelContainer(for: Script.self, ScriptSection.self, configurations: config)
+        let container = try! ModelContainer(for: Script.self, ScriptSection.self, PersistedChatMessage.self, configurations: config)
         let script = sampleScript()
         container.mainContext.insert(script)
         return container

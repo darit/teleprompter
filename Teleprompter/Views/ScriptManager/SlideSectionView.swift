@@ -4,6 +4,8 @@ import SwiftUI
 struct SlideSectionView: View {
     @Bindable var section: ScriptSection
     var fontSize: Double = 13
+    @State private var isEditing = false
+    @FocusState private var editorFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -24,6 +26,15 @@ struct SlideSectionView: View {
 
                 Spacer()
 
+                if isEditing {
+                    Button("Done") {
+                        commitEdit()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                }
+
                 Text(ReadTimeEstimator.formatDuration(
                     ReadTimeEstimator.estimateDuration(for: section.content)
                 ))
@@ -31,14 +42,44 @@ struct SlideSectionView: View {
                 .foregroundStyle(.quaternary)
             }
 
-            TextEditor(text: $section.content)
-                .font(.system(size: fontSize))
-                .foregroundStyle(.secondary)
-                .lineSpacing(6)
-                .scrollContentBackground(.hidden)
-                .padding(.leading, 4)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            if isEditing {
+                TextEditor(text: $section.content)
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(6)
+                    .scrollContentBackground(.hidden)
+                    .padding(.leading, 4)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .focused($editorFocused)
+                    .onChange(of: editorFocused) { _, focused in
+                        if !focused {
+                            commitEdit()
+                        }
+                    }
+                    .onKeyPress(.escape) {
+                        commitEdit()
+                        return .handled
+                    }
+            } else {
+                Text(StageDirectionRenderer.renderAttributedString(section.content))
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(6)
+                    .padding(.leading, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isEditing = true
+                        editorFocused = true
+                    }
+            }
         }
+    }
+
+    private func commitEdit() {
+        isEditing = false
+        editorFocused = false
     }
 }
 

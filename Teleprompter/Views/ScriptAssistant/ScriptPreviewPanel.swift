@@ -1,13 +1,42 @@
 // Teleprompter/Views/ScriptAssistant/ScriptPreviewPanel.swift
 import SwiftUI
 
-struct ScriptPreviewPanel: View {
-    let script: Script
-    let totalSlides: Int
-    let targetDurationMinutes: Int?
-    let activeSlideNumber: Int?
+/// Value-type snapshot of a ScriptSection, breaking the SwiftData observation chain.
+struct SectionSnapshot: Identifiable, Equatable {
+    var id: Int { slideNumber }
+    let slideNumber: Int
+    let label: String
+    let content: String
+    let accentColorHex: String
+}
 
-    @State private var pulsingOpacity: Double = 0.3
+/// Self-contained pulsing border that manages its own animation state.
+private struct PulsingBorder: View {
+    @State private var opacity: Double = 0.3
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.accentColor, lineWidth: 2)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    opacity = 0.8
+                }
+            }
+    }
+}
+
+struct ScriptPreviewPanel: View {
+    var sections: [SectionSnapshot]
+    var totalSlides: Int
+    var targetDurationMinutes: Int?
+    var activeSlideNumber: Int?
+    var isStreaming: Bool = false
+    var onGenerate: ((Int) -> Void)?
+
+    private var sortedSections: [SectionSnapshot] {
+        sections.sorted { $0.slideNumber < $1.slideNumber }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,7 +46,7 @@ struct ScriptPreviewPanel: View {
                     Text("Script Preview")
                         .font(.system(size: 14, weight: .semibold))
 
-                    if !script.sections.isEmpty {
+                    if !sections.isEmpty {
                         Text("Live updating")
                             .font(.system(size: 10))
                             .foregroundStyle(.green)
@@ -33,32 +62,23 @@ struct ScriptPreviewPanel: View {
             Divider()
 
             // Sections
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(script.sortedSections) { section in
-                            previewSection(section)
-                                .id(section.slideNumber)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(sortedSections) { section in
+                        previewSection(section)
+                    }
 
-                        // Show remaining slides as placeholders
-                        let existingSlideNumbers = Set(script.sections.map(\.slideNumber))
-                        ForEach(1...max(totalSlides, 1), id: \.self) { slideNum in
-                            if !existingSlideNumbers.contains(slideNum) {
-                                waitingSection(slideNumber: slideNum)
-                                    .id(slideNum)
-                            }
-                        }
-                    }
-                    .padding(16)
-                }
-                .onChange(of: activeSlideNumber) { _, newValue in
-                    if let slideNum = newValue {
-                        withAnimation {
-                            proxy.scrollTo(slideNum, anchor: .center)
+                    let existingSlideNumbers = Set(sections.map(\.slideNumber))
+                    ForEach(1...max(totalSlides, 1), id: \.self) { slideNum in
+                        if !existingSlideNumbers.contains(slideNum) {
+                            waitingSection(slideNumber: slideNum)
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Divider()
@@ -68,38 +88,50 @@ struct ScriptPreviewPanel: View {
         }
     }
 
-    private func previewSection(_ section: ScriptSection) -> some View {
+    private func previewSection(_ section: SectionSnapshot) -> some View {
         let isActive = activeSlideNumber == section.slideNumber
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 SlidePillView(slideNumber: section.slideNumber, colorHex: section.accentColorHex)
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.green)
+                let hasContent = !section.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                if hasContent {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.green)
+                }
                 Spacer()
-                Text(ReadTimeEstimator.formatDuration(
-                    ReadTimeEstimator.estimateDuration(for: section.content)
-                ))
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
+
+                if !isStreaming, let onGenerate {
+                    Button {
+                        onGenerate(section.slideNumber)
+                    } label: {
+                        Image(systemName: hasContent ? "arrow.counterclockwise" : "sparkles")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(hasContent ? "Regenerate slide script" : "Generate slide script")
+                }
+
+                if hasContent {
+                    Text(ReadTimeEstimator.formatDuration(
+                        ReadTimeEstimator.estimateDuration(for: section.content)
+                    ))
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                }
             }
 
-            Text(section.content)
+            Text(StageDirectionRenderer.renderAttributedString(section.content))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .overlay {
             if isActive {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.accentColor, lineWidth: 2)
-                    .opacity(pulsingOpacity)
-            }
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                pulsingOpacity = 0.8
+                PulsingBorder()
             }
         }
     }
@@ -112,12 +144,24 @@ struct ScriptPreviewPanel: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.quaternary)
             Spacer()
+
+            if !isStreaming, let onGenerate {
+                Button {
+                    onGenerate(slideNumber)
+                } label: {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Generate slide script")
+            }
         }
     }
 
     private var progressBar: some View {
         HStack(spacing: 8) {
-            let readyCount = script.sections.count
+            let readyCount = sections.filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
             Text("\(readyCount) of \(totalSlides) slides ready")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -127,7 +171,7 @@ struct ScriptPreviewPanel: View {
 
             Spacer()
 
-            let totalDuration = script.sortedSections.reduce(0.0) { total, section in
+            let totalDuration = sortedSections.reduce(0.0) { total, section in
                 total + ReadTimeEstimator.estimateDuration(for: section.content)
             }
             let durationText = ReadTimeEstimator.formatDuration(totalDuration)

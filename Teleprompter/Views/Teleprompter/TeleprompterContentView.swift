@@ -35,7 +35,7 @@ struct TeleprompterContentView: View {
             // Controls zone (always interactive)
             TeleprompterControlsView(state: state)
         }
-        .background(.black.opacity(0.85))
+        .background(.black.opacity(state.backgroundOpacity))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

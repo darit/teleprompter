@@ -3,11 +3,13 @@ import SwiftUI
 struct ChatMessageView: View {
     let message: ChatMessage
     let isLastAssistantMessage: Bool
+    var onDelete: (() -> Void)?
     @State private var isHovered = false
 
-    init(message: ChatMessage, isLastAssistantMessage: Bool = false) {
+    init(message: ChatMessage, isLastAssistantMessage: Bool = false, onDelete: (() -> Void)? = nil) {
         self.message = message
         self.isLastAssistantMessage = isLastAssistantMessage
+        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -18,20 +20,28 @@ struct ChatMessageView: View {
                 .foregroundStyle(.secondary)
 
             // Message content
-            let segments = parseSegments(message.content)
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                switch segment {
-                case .text(let text):
-                    MarkdownContentView(text: text)
+            if message.role == .user {
+                Text(message.content)
+                    .font(.system(size: 15))
+                    .lineSpacing(6)
+                    .textSelection(.enabled)
+            } else {
+                let segments = parseSegments(message.content)
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    switch segment {
+                    case .text(let text):
+                        MarkdownContentView(text: text)
 
-                case .script(let slideNumber, let content):
-                    scriptBlock(slideNumber: slideNumber, content: content)
+                    case .script(let slideNumber, let content):
+                        scriptBlock(slideNumber: slideNumber, content: content)
+                    }
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .overlay(alignment: .topTrailing) {
             if isHovered {
                 messageActions
@@ -70,6 +80,18 @@ struct ChatMessageView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Regenerate response")
+            }
+
+            if let onDelete {
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Delete message")
             }
         }
         .padding(.horizontal, 8)

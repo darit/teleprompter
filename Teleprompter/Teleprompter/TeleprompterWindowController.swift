@@ -22,7 +22,7 @@ final class TeleprompterWindowController {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 700, height: 300),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow],
+            styleMask: [.borderless, .nonactivatingPanel, .utilityWindow, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -32,8 +32,6 @@ final class TeleprompterWindowController {
         panel.sharingType = .none
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -49,8 +47,6 @@ final class TeleprompterWindowController {
 
         panel.orderFront(nil)
         self.panel = panel
-
-        updateClickThrough()
     }
 
     func hide() {

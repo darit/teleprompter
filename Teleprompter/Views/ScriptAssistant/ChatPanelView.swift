@@ -5,105 +5,49 @@ struct ChatPanelView: View {
     @Bindable var conversation: ConversationManager
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
-    @State private var isAtBottom = true
-    @State private var hasNewContent = false
-
     var body: some View {
         VStack(spacing: 0) {
             // Messages
             ScrollViewReader { proxy in
-                ZStack(alignment: .bottomTrailing) {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(conversation.visibleMessages.enumerated()), id: \.element.id) { index, message in
-                                let isLastAssistant = message.role == .assistant &&
-                                    message.id == conversation.visibleMessages.last(where: { $0.role == .assistant })?.id
+                ScrollView {
+                    VStack(spacing: 0) {
+                        let visible = conversation.visibleMessages
+                        let lastAssistantId = visible.last(where: { $0.role == .assistant })?.id
 
-                                ChatMessageView(message: message, isLastAssistantMessage: isLastAssistant)
-
-                                if index < conversation.visibleMessages.count - 1 {
-                                    Divider()
-                                        .padding(.horizontal, 16)
+                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, message in
+                            ChatMessageView(
+                                message: message,
+                                isLastAssistantMessage: message.role == .assistant && message.id == lastAssistantId,
+                                onDelete: {
+                                    conversation.deleteMessage(message)
                                 }
-                            }
+                            )
 
-                            if conversation.isStreaming {
+                            if index < visible.count - 1 {
                                 Divider()
                                     .padding(.horizontal, 16)
-                                streamingMessageView
-                                    .id("streaming")
                             }
+                        }
 
-                            Color.clear
-                                .frame(height: 1)
-                                .id("bottom")
-
-                            GeometryReader { geo in
-                                Color.clear
-                                    .preference(key: ScrollOffsetKey.self,
-                                                value: geo.frame(in: .named("chatScroll")).maxY)
-                            }
-                            .frame(height: 0)
-                        }
-                        .padding(.vertical, 12)
-                    }
-                    .coordinateSpace(name: "chatScroll")
-                    .defaultScrollAnchor(.bottom)
-                    .onPreferenceChange(ScrollOffsetKey.self) { maxY in
-                        // When the bottom anchor is visible (maxY > 0 means it's in the viewport),
-                        // we consider the user to be at the bottom.
-                        let atBottom = maxY > 0
-                        if atBottom {
-                            hasNewContent = false
-                        }
-                        isAtBottom = atBottom
-                    }
-                    .onChange(of: conversation.messages.count) {
-                        if isAtBottom {
-                            withAnimation {
-                                proxy.scrollTo("bottom", anchor: .bottom)
-                            }
-                        } else {
-                            hasNewContent = true
-                        }
-                    }
-                    .onChange(of: conversation.currentStreamingText) {
                         if conversation.isStreaming {
-                            proxy.scrollTo("bottom", anchor: .bottom)
+                            Divider()
+                                .padding(.horizontal, 16)
+                            streamingMessageView
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("chatBottom")
                     }
-
-                    if !isAtBottom {
-                        Button {
-                            isAtBottom = true
-                            hasNewContent = false
-                            withAnimation {
-                                proxy.scrollTo("bottom", anchor: .bottom)
-                            }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 32, height: 32)
-                                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-
-                                if hasNewContent {
-                                    Circle()
-                                        .fill(Color.accentColor)
-                                        .frame(width: 8, height: 8)
-                                        .offset(x: 10, y: -10)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 16)
-                        .transition(.opacity.combined(with: .scale))
-                    }
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .defaultScrollAnchor(.bottom)
+                .onChange(of: conversation.visibleMessages.count) {
+                    proxy.scrollTo("chatBottom")
+                }
+                .onChange(of: conversation.isStreaming) {
+                    proxy.scrollTo("chatBottom")
                 }
             }
 
@@ -117,47 +61,7 @@ struct ChatPanelView: View {
                 .padding(8)
             }
 
-            // Input bar
-            VStack(spacing: 0) {
-                Divider()
-
-                HStack(alignment: .bottom, spacing: 8) {
-                    TextField("Ask about your script...", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...8)
-                        .font(.system(size: 14))
-                        .focused($isInputFocused)
-                        .onSubmit {
-                            sendMessage()
-                        }
-
-                    Button {
-                        if conversation.isStreaming {
-                            conversation.stopStreaming()
-                        } else {
-                            sendMessage()
-                        }
-                    } label: {
-                        Image(systemName: conversation.isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(conversation.isStreaming ? .red : .accentColor)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!conversation.isStreaming && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(nsColor: .quaternaryLabelColor), lineWidth: 0.5)
-                        }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
+            inputBar
         }
         .onAppear {
             isInputFocused = true
@@ -166,6 +70,54 @@ struct ChatPanelView: View {
             Task {
                 await conversation.regenerateLastResponse()
             }
+        }
+    }
+
+    private var inputBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(spacing: 8) {
+                TextField("Ask about your script...", text: $inputText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...10)
+                    .font(.system(size: 14))
+                    .focused($isInputFocused)
+                    .onKeyPress(.return, phases: .down) { keyPress in
+                        if keyPress.modifiers.contains(.shift) {
+                            inputText += "\n"
+                            return .handled
+                        }
+                        sendMessage()
+                        return .handled
+                    }
+
+                Button {
+                    if conversation.isStreaming {
+                        conversation.stopStreaming()
+                    } else {
+                        sendMessage()
+                    }
+                } label: {
+                    Image(systemName: conversation.isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(conversation.isStreaming ? .red : .accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(!conversation.isStreaming && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(nsColor: .quaternaryLabelColor), lineWidth: 0.5)
+                    }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
@@ -179,7 +131,11 @@ struct ChatPanelView: View {
                 TypingIndicatorView()
             } else {
                 HStack(alignment: .bottom, spacing: 0) {
-                    MarkdownContentView(text: conversation.currentStreamingText)
+                    // Use plain text during streaming to avoid expensive markdown re-parsing on every token
+                    Text(conversation.currentStreamingText)
+                        .font(.system(size: 15))
+                        .lineSpacing(6)
+                        .textSelection(.enabled)
 
                     BlinkingCursorView()
                 }
@@ -198,13 +154,7 @@ struct ChatPanelView: View {
             await conversation.send(text)
         }
     }
-}
 
-private struct ScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
 }
 
 private struct BlinkingCursorView: View {

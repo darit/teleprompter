@@ -5,7 +5,7 @@ struct MarkdownContentView: View {
 
     var body: some View {
         let blocks = Self.parseBlocks(text)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .text(let content):
@@ -34,6 +34,10 @@ struct MarkdownContentView: View {
                             .foregroundStyle(.secondary)
                             .padding(.leading, 12)
                     }
+
+                case .horizontalRule:
+                    Divider()
+                        .padding(.vertical, 4)
                 }
             }
         }
@@ -93,7 +97,7 @@ struct MarkdownContentView: View {
     static func attributedMarkdown(_ text: String) -> AttributedString {
         (try? AttributedString(
             markdown: text,
-            options: .init(interpretedSyntax: .full)
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )) ?? AttributedString(text)
     }
 }
@@ -105,9 +109,36 @@ enum MarkdownBlock {
     case codeBlock(language: String?, code: String)
     case heading(level: Int, content: String)
     case blockquote(String)
+    case horizontalRule
 }
 
 extension MarkdownContentView {
+
+    /// Matches markdown horizontal rules: `---`, `***`, `___` (3+ chars), or the Unicode em dash `\u{2E3B}`
+    private static func isHorizontalRule(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.allSatisfy({ $0 == "\u{2014}" || $0 == "\u{2E3A}" || $0 == "\u{2E3B}" }) && !trimmed.isEmpty {
+            return true
+        }
+        guard trimmed.count >= 3 else { return false }
+        let unique = Set(trimmed)
+        return unique.count == 1 && (unique.contains("-") || unique.contains("*") || unique.contains("_"))
+    }
+
+    private static func flushText(_ currentText: inout [String], into blocks: inout [MarkdownBlock]) {
+        let joined = currentText.joined(separator: "\n")
+        currentText = []
+
+        // Split on blank lines to create separate paragraphs
+        let paragraphs = joined.components(separatedBy: "\n\n")
+        for paragraph in paragraphs {
+            let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                blocks.append(.text(trimmed))
+            }
+        }
+    }
+
     static func parseBlocks(_ text: String) -> [MarkdownBlock] {
         var blocks: [MarkdownBlock] = []
         let lines = text.components(separatedBy: "\n")
@@ -115,14 +146,15 @@ extension MarkdownContentView {
         var inCodeBlock = false
         var codeLanguage: String?
         var codeLines: [String] = []
+        var blockquoteLines: [String] = []
 
         for line in lines {
             if line.hasPrefix("```") && !inCodeBlock {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty {
-                    blocks.append(.text(textContent))
+                flushText(&currentText, into: &blocks)
+                if !blockquoteLines.isEmpty {
+                    blocks.append(.blockquote(blockquoteLines.joined(separator: "\n")))
+                    blockquoteLines = []
                 }
-                currentText = []
                 inCodeBlock = true
                 let lang = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 codeLanguage = lang.isEmpty ? nil : lang
@@ -134,33 +166,39 @@ extension MarkdownContentView {
                 codeLines = []
             } else if inCodeBlock {
                 codeLines.append(line)
-            } else if line.hasPrefix("#### ") {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty { blocks.append(.text(textContent)) }
-                currentText = []
-                blocks.append(.heading(level: 4, content: String(line.dropFirst(5))))
-            } else if line.hasPrefix("### ") {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty { blocks.append(.text(textContent)) }
-                currentText = []
-                blocks.append(.heading(level: 3, content: String(line.dropFirst(4))))
-            } else if line.hasPrefix("## ") {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty { blocks.append(.text(textContent)) }
-                currentText = []
-                blocks.append(.heading(level: 2, content: String(line.dropFirst(3))))
-            } else if line.hasPrefix("# ") {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty { blocks.append(.text(textContent)) }
-                currentText = []
-                blocks.append(.heading(level: 1, content: String(line.dropFirst(2))))
-            } else if line.hasPrefix("> ") {
-                let textContent = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !textContent.isEmpty { blocks.append(.text(textContent)) }
-                currentText = []
-                blocks.append(.blockquote(String(line.dropFirst(2))))
+            } else if isHorizontalRule(line) {
+                flushText(&currentText, into: &blocks)
+                if !blockquoteLines.isEmpty {
+                    blocks.append(.blockquote(blockquoteLines.joined(separator: "\n")))
+                    blockquoteLines = []
+                }
+                blocks.append(.horizontalRule)
+            } else if line.hasPrefix("> ") || line == ">" {
+                flushText(&currentText, into: &blocks)
+                let content = line.hasPrefix("> ") ? String(line.dropFirst(2)) : ""
+                blockquoteLines.append(content)
             } else {
-                currentText.append(line)
+                // Flush any accumulated blockquote
+                if !blockquoteLines.isEmpty {
+                    blocks.append(.blockquote(blockquoteLines.joined(separator: "\n")))
+                    blockquoteLines = []
+                }
+
+                if line.hasPrefix("#### ") {
+                    flushText(&currentText, into: &blocks)
+                    blocks.append(.heading(level: 4, content: String(line.dropFirst(5))))
+                } else if line.hasPrefix("### ") {
+                    flushText(&currentText, into: &blocks)
+                    blocks.append(.heading(level: 3, content: String(line.dropFirst(4))))
+                } else if line.hasPrefix("## ") {
+                    flushText(&currentText, into: &blocks)
+                    blocks.append(.heading(level: 2, content: String(line.dropFirst(3))))
+                } else if line.hasPrefix("# ") {
+                    flushText(&currentText, into: &blocks)
+                    blocks.append(.heading(level: 1, content: String(line.dropFirst(2))))
+                } else {
+                    currentText.append(line)
+                }
             }
         }
 
@@ -168,10 +206,11 @@ extension MarkdownContentView {
             blocks.append(.codeBlock(language: codeLanguage, code: codeLines.joined(separator: "\n")))
         }
 
-        let remaining = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !remaining.isEmpty {
-            blocks.append(.text(remaining))
+        if !blockquoteLines.isEmpty {
+            blocks.append(.blockquote(blockquoteLines.joined(separator: "\n")))
         }
+
+        flushText(&currentText, into: &blocks)
 
         if blocks.isEmpty {
             blocks.append(.text(text))

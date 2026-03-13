@@ -12,20 +12,33 @@ struct TeleprompterSection: Identifiable {
 @Observable
 final class TeleprompterState {
     let sections: [TeleprompterSection]
-    var fontSize: Double
-    var scrollSpeed: Double
+    /// Display font size in points
+    var fontSize: Double {
+        didSet { sourceScript?.fontSize = fontSize }
+    }
+    /// Speaking pace in words per minute
+    var scrollSpeed: Double {
+        didSet { sourceScript?.scrollSpeed = scrollSpeed }
+    }
     var scrollOffset: CGFloat = 0
     var isPlaying = false
     var currentSectionIndex = 0
     var opacity: Double = 1.0
-    var isClickThrough = true
+    /// Background opacity (0 = fully transparent, 1 = solid black)
+    var backgroundOpacity: Double = 0.85
+    var isClickThrough = false
+    /// Weak reference to persist WPM changes back to the source Script
+    weak var sourceScript: Script?
 
-    private static let minSpeed: Double = 0.25
-    private static let maxSpeed: Double = 3.0
-    private static let speedStep: Double = 0.25
+    private static let minSpeed: Double = 60
+    private static let maxSpeed: Double = 250
+    private static let speedStep: Double = 10
     private static let minOpacity: Double = 0.2
     private static let maxOpacity: Double = 1.0
     private static let opacityStep: Double = 0.1
+    private static let minFontSize: Double = 10
+    private static let maxFontSize: Double = 48
+    private static let fontSizeStep: Double = 2
 
     init(sections: [TeleprompterSection], fontSize: Double, scrollSpeed: Double) {
         self.sections = sections
@@ -59,6 +72,16 @@ final class TeleprompterState {
 
     func decreaseSpeed() {
         scrollSpeed = max(Self.minSpeed, scrollSpeed - Self.speedStep)
+    }
+
+    // MARK: - Font size
+
+    func increaseFontSize() {
+        fontSize = min(Self.maxFontSize, fontSize + Self.fontSizeStep)
+    }
+
+    func decreaseFontSize() {
+        fontSize = max(Self.minFontSize, fontSize - Self.fontSizeStep)
     }
 
     // MARK: - Opacity
@@ -107,10 +130,14 @@ final class TeleprompterState {
                 accentColorHex: section.accentColorHex
             )
         }
-        return TeleprompterState(
+        // Migrate old multiplier format (0.25-3.0) to WPM (60-250)
+        let wpm = script.scrollSpeed < 10 ? 150.0 : script.scrollSpeed
+        let state = TeleprompterState(
             sections: teleprompterSections,
             fontSize: script.fontSize,
-            scrollSpeed: script.scrollSpeed
+            scrollSpeed: wpm
         )
+        state.sourceScript = script
+        return state
     }
 }

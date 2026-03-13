@@ -5,55 +5,50 @@ struct TeleprompterControlsView: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Lock toggle
-            Button {
-                state.toggleClickThrough()
-                TeleprompterWindowController.shared.updateClickThrough()
-            } label: {
-                Image(systemName: state.isClickThrough ? "lock.open" : "lock")
-                    .font(.system(size: 14))
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .help(state.isClickThrough ? "Lock (click-through ON)" : "Unlock (click-through OFF)")
-
-            Divider().frame(height: 20)
-
             // Transport controls
             HStack(spacing: 12) {
                 Button {
                     state.jumpBackward()
                 } label: {
-                    Image(systemName: "backward.end.fill")
-                        .font(.system(size: 12))
+                    VStack(spacing: 2) {
+                        Image(systemName: "backward.end.fill")
+                            .font(.system(size: 12))
+                        shortcutLabel("\u{21E7}\u{2318}\u{2190}")
+                    }
                 }
                 .buttonStyle(.plain)
-                .help("Previous section")
+                .help("Previous section (Cmd+Shift+Left)")
 
                 Button {
                     state.togglePlayPause()
                 } label: {
-                    Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16))
-                        .frame(width: 32, height: 32)
+                    VStack(spacing: 2) {
+                        Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 16))
+                        shortcutLabel("\u{21E7}\u{2318}P")
+                    }
+                    .frame(width: 36, height: 38)
                 }
                 .buttonStyle(.plain)
-                .help(state.isPlaying ? "Pause" : "Play")
+                .help(state.isPlaying ? "Pause (Cmd+Shift+P)" : "Play (Cmd+Shift+P)")
 
                 Button {
                     state.jumpForward()
                 } label: {
-                    Image(systemName: "forward.end.fill")
-                        .font(.system(size: 12))
+                    VStack(spacing: 2) {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 12))
+                        shortcutLabel("\u{21E7}\u{2318}\u{2192}")
+                    }
                 }
                 .buttonStyle(.plain)
-                .help("Next section")
+                .help("Next section (Cmd+Shift+Right)")
             }
 
-            Divider().frame(height: 20)
+            Divider().frame(height: 24)
 
-            // Speed
-            HStack(spacing: 4) {
+            // WPM pace control
+            HStack(spacing: 6) {
                 Button {
                     state.decreaseSpeed()
                 } label: {
@@ -62,9 +57,14 @@ struct TeleprompterControlsView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("\(String(format: "%.2g", state.scrollSpeed))x")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .frame(width: 32)
+                VStack(spacing: 1) {
+                    Text("\(Int(state.scrollSpeed))")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    Text("WPM")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(width: 40)
 
                 Button {
                     state.increaseSpeed()
@@ -74,18 +74,55 @@ struct TeleprompterControlsView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .help("Scroll speed")
+            .help("Speaking pace (words per minute)")
 
-            Divider().frame(height: 20)
+            Divider().frame(height: 24)
 
-            // Opacity
+            // Font size
+            HStack(spacing: 6) {
+                Button {
+                    state.decreaseFontSize()
+                } label: {
+                    Image(systemName: "textformat.size.smaller")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+
+                Text("\(Int(state.fontSize))")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .frame(width: 22)
+
+                Button {
+                    state.increaseFontSize()
+                } label: {
+                    Image(systemName: "textformat.size.larger")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+            }
+            .help("Font size")
+
+            Divider().frame(height: 24)
+
+            // Background opacity
+            HStack(spacing: 4) {
+                Image(systemName: "square.filled.on.square")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+
+                Slider(value: $state.backgroundOpacity, in: 0.0...1.0, step: 0.05)
+                    .frame(width: 50)
+            }
+            .help("Background opacity")
+
+            // Window opacity
             HStack(spacing: 4) {
                 Image(systemName: "circle.lefthalf.filled")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
 
                 Slider(value: $state.opacity, in: 0.2...1.0, step: 0.1)
-                    .frame(width: 60)
+                    .frame(width: 50)
                     .onChange(of: state.opacity) {
                         TeleprompterWindowController.shared.updateOpacity()
                     }
@@ -109,5 +146,11 @@ struct TeleprompterControlsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+
+    private func shortcutLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.tertiary)
     }
 }
