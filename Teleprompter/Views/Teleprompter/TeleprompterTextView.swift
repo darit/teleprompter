@@ -326,8 +326,32 @@ struct TeleprompterTextView: View {
                     .fill(nextColor.opacity(0.08))
                     .strokeBorder(nextColor.opacity(0.15), lineWidth: 1)
             }
+
+            // Preview of the next slide's opening lines
+            let preview = nextSectionPreview(nextSection.content, maxLines: 2)
+            if !preview.isEmpty {
+                Text(preview)
+                    .font(.system(size: state.fontSize * 0.85))
+                    .lineSpacing(state.fontSize * 0.35)
+                    .foregroundStyle(nextColor.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 4)
+            }
         }
         .padding(.top, 12)
+    }
+
+    /// Extracts the first couple of lines from the next section, stripping stage directions.
+    private func nextSectionPreview(_ content: String, maxLines: Int) -> String {
+        content
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in
+                !line.isEmpty && !line.hasPrefix("[")
+            }
+            .prefix(maxLines)
+            .joined(separator: "\n")
     }
 
     private func skipTransition() {
