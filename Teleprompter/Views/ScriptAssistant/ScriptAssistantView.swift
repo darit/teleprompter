@@ -71,11 +71,22 @@ struct ScriptAssistantView: View {
                     targetDurationMinutes: targetMinutes,
                     activeSlideNumber: activeSlide,
                     isStreaming: isConversationStreaming,
+                    parallelGeneratingSlides: conversation?.parallelGeneratingSlides ?? [],
+                    isGeneratingAll: conversation?.isGeneratingAll ?? false,
                     onGenerate: { slideNumber in
                         guard let conversation else { return }
                         Task {
                             await conversation.generateSlide(slideNumber)
                         }
+                    },
+                    onGenerateAll: {
+                        guard let conversation else { return }
+                        Task {
+                            await conversation.generateAllSlides()
+                        }
+                    },
+                    onStopGenerateAll: {
+                        conversation?.stopGenerateAll()
                     }
                 )
                 .frame(width: previewWidth)

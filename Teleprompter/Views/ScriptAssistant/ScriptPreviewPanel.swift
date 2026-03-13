@@ -32,7 +32,11 @@ struct ScriptPreviewPanel: View {
     var targetDurationMinutes: Int?
     var activeSlideNumber: Int?
     var isStreaming: Bool = false
+    var parallelGeneratingSlides: Set<Int> = []
+    var isGeneratingAll: Bool = false
     var onGenerate: ((Int) -> Void)?
+    var onGenerateAll: (() -> Void)?
+    var onStopGenerateAll: (() -> Void)?
 
     private var sortedSections: [SectionSnapshot] {
         sections.sorted { $0.slideNumber < $1.slideNumber }
@@ -46,7 +50,12 @@ struct ScriptPreviewPanel: View {
                     Text("Script Preview")
                         .font(.system(size: 14, weight: .semibold))
 
-                    if !sections.isEmpty {
+                    if isGeneratingAll {
+                        let done = totalSlides - parallelGeneratingSlides.count
+                        Text("Generating \(done)/\(totalSlides)...")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                    } else if !sections.isEmpty {
                         Text("Live updating")
                             .font(.system(size: 10))
                             .foregroundStyle(.green)
@@ -54,6 +63,34 @@ struct ScriptPreviewPanel: View {
                 }
 
                 Spacer()
+
+                if isGeneratingAll {
+                    Button {
+                        onStopGenerateAll?()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 8))
+                            Text("Stop")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                } else if !isStreaming {
+                    Button {
+                        onGenerateAll?()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9))
+                            Text("Generate All")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("Generate scripts for all slides in parallel")
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -90,19 +127,24 @@ struct ScriptPreviewPanel: View {
 
     private func previewSection(_ section: SectionSnapshot) -> some View {
         let isActive = activeSlideNumber == section.slideNumber
+        let isParallelGenerating = parallelGeneratingSlides.contains(section.slideNumber)
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 SlidePillView(slideNumber: section.slideNumber, colorHex: section.accentColorHex)
                 let hasContent = !section.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                if hasContent {
+                if isParallelGenerating {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                } else if hasContent {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(.green)
                 }
                 Spacer()
 
-                if !isStreaming, let onGenerate {
+                if !isStreaming && !isGeneratingAll, let onGenerate {
                     Button {
                         onGenerate(section.slideNumber)
                     } label: {
@@ -130,22 +172,34 @@ struct ScriptPreviewPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .overlay {
-            if isActive {
+            if isActive || isParallelGenerating {
                 PulsingBorder()
             }
         }
     }
 
     private func waitingSection(slideNumber: Int) -> some View {
-        HStack(spacing: 6) {
+        let isParallelGenerating = parallelGeneratingSlides.contains(slideNumber)
+
+        return HStack(spacing: 6) {
             let accentColors = ["#4A9EFF", "#34C759", "#FF9500", "#FF2D55", "#AF52DE", "#5AC8FA", "#FFCC00", "#FF6B35"]
             SlidePillView(slideNumber: slideNumber, colorHex: accentColors[(slideNumber - 1) % accentColors.count])
-            Text("Waiting for context...")
-                .font(.system(size: 10))
-                .foregroundStyle(.quaternary)
+
+            if isParallelGenerating {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 12, height: 12)
+                Text("Generating...")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+            } else {
+                Text("Waiting for context...")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.quaternary)
+            }
             Spacer()
 
-            if !isStreaming, let onGenerate {
+            if !isStreaming && !isGeneratingAll, let onGenerate {
                 Button {
                     onGenerate(slideNumber)
                 } label: {
@@ -155,6 +209,11 @@ struct ScriptPreviewPanel: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Generate slide script")
+            }
+        }
+        .overlay {
+            if isParallelGenerating {
+                PulsingBorder()
             }
         }
     }

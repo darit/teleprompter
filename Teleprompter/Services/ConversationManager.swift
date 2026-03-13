@@ -9,11 +9,16 @@ final class ConversationManager {
     var currentStreamingText = ""
     var error: String?
     var activelyStreamingSlideNumber: Int?
+    /// Slide numbers currently being generated in parallel
+    var parallelGeneratingSlides: Set<Int> = []
+    /// Whether a parallel "generate all" is in progress
+    var isGeneratingAll = false
 
     /// Called when script sections are updated (for preview refresh).
     var onSectionsChanged: (() -> Void)?
 
     private var streamingTask: Task<Void, Never>?
+    private var generateAllTask: Task<Void, Never>?
 
     private(set) var provider: any LLMProvider
     private let slides: [SlideContent]
@@ -145,6 +150,117 @@ final class ConversationManager {
     func regenerateLastResponse() async {
         removeLastAssistantMessage()
         await streamResponse()
+    }
+
+    /// Generate scripts for all slides in parallel, spawning concurrent LLM calls.
+    /// Each slide gets its own independent call with the full presentation context.
+    @MainActor
+    func generateAllSlides(maxConcurrency: Int = 3) async {
+        guard !isGeneratingAll else { return }
+        isGeneratingAll = true
+        parallelGeneratingSlides = Set(slides.map(\.slideNumber))
+
+        // Add a user message to the chat for context
+        let userMsg = ChatMessage(role: .user, content: "Generate teleprompter scripts for all \(slides.count) slides.")
+        messages.append(userMsg)
+        persistMessage(userMsg)
+
+        let systemPrompt = PromptTemplates.systemPrompt(
+            slides: slides,
+            targetDurationMinutes: targetDurationMinutes
+        )
+        let allImages = slides.flatMap(\.images)
+
+        let providerRef = provider
+        let slidesCopy = slides
+
+        generateAllTask = Task {
+            let semaphore = AsyncSemaphore(limit: maxConcurrency)
+
+            await withTaskGroup(of: (Int, String?).self) { group in
+                for slide in slidesCopy {
+                    let slideNum = slide.slideNumber
+                    let slideTitle = slide.title
+                    let promptText = systemPrompt
+                    let imgs = allImages
+
+                    group.addTask {
+                        await semaphore.wait()
+                        defer { Task { await semaphore.signal() } }
+
+                        guard !Task.isCancelled else { return (slideNum, nil) }
+
+                        let slidePrompt = """
+                        Generate the teleprompter script for slide \(slideNum) (\(slideTitle)). \
+                        Use the slide content and speaker notes as context. \
+                        Output ONLY the [SCRIPT_START slide=\(slideNum)]...[SCRIPT_END] block for this slide. \
+                        Do not include commentary or text outside the markers.
+                        """
+                        let callMessages = [
+                            ChatMessage(role: .system, content: promptText, images: imgs),
+                            ChatMessage(role: .user, content: slidePrompt)
+                        ]
+
+                        var buffer = ""
+                        do {
+                            let stream = try await providerRef.stream(messages: callMessages)
+                            for await chunk in stream {
+                                if Task.isCancelled { break }
+                                buffer += chunk
+                            }
+                        } catch {
+                            return (slideNum, nil)
+                        }
+
+                        // Parse the result
+                        let segments = ConversationManager.parseResponse(buffer)
+                        let scriptContent = segments.first(where: {
+                            if case .script(let n) = $0.type { return n == slideNum }
+                            return false
+                        })?.content
+
+                        return (slideNum, scriptContent)
+                    }
+                }
+
+                // Collect results as they arrive
+                for await (slideNum, content) in group {
+                    if let content, !content.isEmpty {
+                        updateScriptSection(slideNumber: slideNum, content: content, updateTimestamp: true)
+                    }
+                    parallelGeneratingSlides.remove(slideNum)
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+
+            // Build summary assistant message
+            let completed = script.sections
+                .filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .sorted { $0.slideNumber < $1.slideNumber }
+
+            var summaryParts = ["Generated scripts for \(completed.count) of \(slidesCopy.count) slides in parallel.\n"]
+            for section in completed {
+                summaryParts.append("[SCRIPT_START slide=\(section.slideNumber)]\n\(section.content)\n[SCRIPT_END]")
+            }
+            let summary = summaryParts.joined(separator: "\n\n")
+            let assistantMsg = ChatMessage(role: .assistant, content: summary)
+            messages.append(assistantMsg)
+            persistMessage(assistantMsg)
+
+            isGeneratingAll = false
+            parallelGeneratingSlides = []
+        }
+
+        await generateAllTask?.value
+    }
+
+    @MainActor
+    func stopGenerateAll() {
+        generateAllTask?.cancel()
+        generateAllTask = nil
+        isGeneratingAll = false
+        parallelGeneratingSlides = []
     }
 
     @MainActor
