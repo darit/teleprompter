@@ -64,6 +64,10 @@ Teleprompter/
 - **LM Studio** — install and start [LM Studio](https://lmstudio.ai), load a model. The app connects to `localhost:1234`
 - **Claude Code CLI** — install with `npm install -g @anthropic-ai/claude-code`
 
+## Author
+
+Made with <3 by **Danny Rodriguez**
+
 ## License
 
 Private repository.

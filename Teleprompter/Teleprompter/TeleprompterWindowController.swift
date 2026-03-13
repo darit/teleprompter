@@ -29,7 +29,7 @@ final class TeleprompterWindowController {
 
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
-        panel.level = .floating
+        panel.level = AppSettings.shared.alwaysOnTop ? .floating : .normal
         panel.sharingType = .none
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false

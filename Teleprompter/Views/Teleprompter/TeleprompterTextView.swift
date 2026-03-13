@@ -46,10 +46,9 @@ struct TeleprompterTextView: View {
     /// Seconds remaining in the initial play countdown (0 = not counting down)
     @State private var playCountdown: Int = 0
 
-    /// How long to dwell at end of slide before advancing (seconds)
-    private let transitionDwell: Double = 2.0
-    /// Seconds to count down before starting playback
-    private let playCountdownSeconds: Int = 3
+    private var settings: AppSettings { .shared }
+    private var transitionDwell: Double { settings.showNextSlideBanner ? settings.transitionDwellSeconds : 0.0 }
+    private var playCountdownSeconds: Int { settings.showPlayCountdown ? settings.playCountdownSeconds : 0 }
 
     var body: some View {
         ZStack {
@@ -101,7 +100,8 @@ struct TeleprompterTextView: View {
             }
 
             // Transition banner overlay pinned to bottom of viewport
-            if transitionCountdown > 0,
+            if settings.showNextSlideBanner,
+               transitionCountdown > 0,
                state.currentSectionIndex < state.sections.count - 1 {
                 let next = state.sections[state.currentSectionIndex + 1]
                 VStack {
@@ -196,7 +196,7 @@ struct TeleprompterTextView: View {
 
                 Spacer()
 
-                if isCurrent && state.isPlaying && playCountdown == 0 {
+                if isCurrent && state.isPlaying && playCountdown == 0 && settings.showSectionTimer {
                     Text(formatTimeRemaining())
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary)
@@ -796,8 +796,14 @@ struct TeleprompterTextView: View {
     private func advanceToNextSection() {
         stopAutoAdvance()
         if state.currentSectionIndex < state.sections.count - 1 {
-            state.jumpForward()
-            startAutoAdvance()
+            if settings.autoAdvance {
+                state.jumpForward()
+                startAutoAdvance()
+            } else {
+                // Pause at end of section, user must manually advance
+                sectionElapsed = sectionDuration
+                state.isPlaying = false
+            }
         } else {
             sectionElapsed = sectionDuration
             state.isPlaying = false

@@ -82,7 +82,7 @@ struct ScriptAssistantView: View {
                     onGenerateAll: {
                         guard let conversation else { return }
                         Task {
-                            await conversation.generateAllSlides()
+                            await conversation.generateAllSlides(maxConcurrency: AppSettings.shared.maxParallelSlides)
                         }
                     },
                     onStopGenerateAll: {
@@ -207,7 +207,8 @@ struct ScriptAssistantView: View {
             }
             return claude
         case .lmStudio:
-            let lm = LMStudioProvider()
+            let baseURL = URL(string: AppSettings.shared.lmStudioBaseURL) ?? URL(string: "http://localhost:1234")!
+            let lm = LMStudioProvider(baseURL: baseURL)
             guard lm.isAvailable else {
                 providerError = "LM Studio is not running. Please start LM Studio and load a model."
                 showingProviderError = true
