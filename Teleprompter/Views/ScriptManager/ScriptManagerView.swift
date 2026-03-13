@@ -41,7 +41,7 @@ struct ScriptManagerView: View {
         .frame(minWidth: 700, minHeight: 450)
         .sheet(item: $assistantData) { data in
             ScriptAssistantView(script: data.script, slides: data.slides)
-                .frame(minWidth: 800, idealWidth: 900, minHeight: 600, idealHeight: 700)
+                .frame(minWidth: 800, idealWidth: 960, minHeight: 600, idealHeight: 720)
         }
         .alert("Import Error", isPresented: $showingImportError) {
             Button("OK") {}
