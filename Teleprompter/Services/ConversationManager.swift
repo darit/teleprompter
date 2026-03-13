@@ -356,8 +356,9 @@ final class ConversationManager {
         }
         if updateTimestamp {
             script.modifiedAt = .now
-            onSectionsChanged?()
         }
+        // Always notify so the preview panel refreshes during streaming
+        onSectionsChanged?()
     }
 
     // MARK: - Response Parsing (internal for testing)
