@@ -1,6 +1,7 @@
 // TeleprompterTests/Services/ConversationManagerTests.swift
 import Testing
 import Foundation
+import SwiftData
 @testable import Teleprompter
 
 @Suite("ConversationManager")
@@ -57,5 +58,28 @@ struct ConversationManagerTests {
         }
 
         #expect(scriptSegments.count == 2)
+    }
+}
+
+extension ConversationManager {
+    @MainActor
+    static func makeTestInstance(
+        provider: LLMProvider? = nil,
+        slides: [SlideContent] = []
+    ) -> ConversationManager {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(
+            for: Script.self, PersistedChatMessage.self, ScriptSection.self,
+            configurations: config
+        )
+        let context = ModelContext(container)
+        let script = Script(name: "Test Script", sections: [])
+        context.insert(script)
+        return ConversationManager(
+            provider: provider ?? MockLLMProvider(),
+            slides: slides,
+            script: script,
+            modelContext: context
+        )
     }
 }
