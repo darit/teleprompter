@@ -5,6 +5,9 @@ struct ScriptPreviewPanel: View {
     let script: Script
     let totalSlides: Int
     let targetDurationMinutes: Int?
+    let activeSlideNumber: Int?
+
+    @State private var pulsingOpacity: Double = 0.3
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,21 +33,32 @@ struct ScriptPreviewPanel: View {
             Divider()
 
             // Sections
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(script.sortedSections) { section in
-                        previewSection(section)
-                    }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(script.sortedSections) { section in
+                            previewSection(section)
+                                .id(section.slideNumber)
+                        }
 
-                    // Show remaining slides as placeholders
-                    let existingSlideNumbers = Set(script.sections.map(\.slideNumber))
-                    ForEach(1...max(totalSlides, 1), id: \.self) { slideNum in
-                        if !existingSlideNumbers.contains(slideNum) {
-                            waitingSection(slideNumber: slideNum)
+                        // Show remaining slides as placeholders
+                        let existingSlideNumbers = Set(script.sections.map(\.slideNumber))
+                        ForEach(1...max(totalSlides, 1), id: \.self) { slideNum in
+                            if !existingSlideNumbers.contains(slideNum) {
+                                waitingSection(slideNumber: slideNum)
+                                    .id(slideNum)
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+                .onChange(of: activeSlideNumber) { _, newValue in
+                    if let slideNum = newValue {
+                        withAnimation {
+                            proxy.scrollTo(slideNum, anchor: .center)
                         }
                     }
                 }
-                .padding(16)
             }
 
             Divider()
@@ -55,7 +69,9 @@ struct ScriptPreviewPanel: View {
     }
 
     private func previewSection(_ section: ScriptSection) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let isActive = activeSlideNumber == section.slideNumber
+
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 SlidePillView(slideNumber: section.slideNumber, colorHex: section.accentColorHex)
                 Image(systemName: "checkmark.circle.fill")
@@ -73,6 +89,18 @@ struct ScriptPreviewPanel: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
+        }
+        .overlay {
+            if isActive {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.accentColor, lineWidth: 2)
+                    .opacity(pulsingOpacity)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                pulsingOpacity = 0.8
+            }
         }
     }
 

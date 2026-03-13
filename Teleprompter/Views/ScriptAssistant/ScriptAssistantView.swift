@@ -93,7 +93,8 @@ struct ScriptAssistantView: View {
                 ScriptPreviewPanel(
                     script: script,
                     totalSlides: slides.count,
-                    targetDurationMinutes: targetMinutes
+                    targetDurationMinutes: targetMinutes,
+                    activeSlideNumber: conversation?.activelyStreamingSlideNumber
                 )
                 .frame(minWidth: 350, idealWidth: 400)
             }
