@@ -41,7 +41,8 @@ final class ScriptSection {
             slideNumber: slideNumber,
             title: label,
             bodyText: originalBodyText,
-            notes: originalNotes
+            notes: originalNotes,
+            images: []
         )
     }
 }

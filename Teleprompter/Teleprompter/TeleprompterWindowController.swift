@@ -27,6 +27,7 @@ final class TeleprompterWindowController {
             defer: false
         )
 
+        hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
         panel.level = .floating
         panel.sharingType = .none
@@ -62,9 +63,16 @@ final class TeleprompterWindowController {
     }
 
     func close() {
-        panel?.close()
+        // Stop playback before closing to avoid timer callbacks during teardown
+        state?.isPlaying = false
+        let panelToClose = panel
         panel = nil
         state = nil
+        // Defer actual close to avoid CoreAnimation commit conflicts
+        DispatchQueue.main.async {
+            panelToClose?.orderOut(nil)
+            panelToClose?.close()
+        }
     }
 
     var isVisible: Bool {

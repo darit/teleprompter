@@ -29,12 +29,13 @@ final class ConversationManager {
         self.targetDurationMinutes = targetDurationMinutes
         self.modelContext = modelContext
 
-        // Add system prompt
+        // Add system prompt with slide images for vision-capable models
         let systemPrompt = PromptTemplates.systemPrompt(
             slides: slides,
             targetDurationMinutes: targetDurationMinutes
         )
-        messages.append(ChatMessage(role: .system, content: systemPrompt))
+        let allSlideImages = slides.flatMap(\.images)
+        messages.append(ChatMessage(role: .system, content: systemPrompt, images: allSlideImages))
 
         // Restore persisted chat history
         let sorted = script.chatHistory.sorted { $0.order < $1.order }

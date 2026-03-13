@@ -100,6 +100,19 @@ struct TeleprompterTextView: View {
                 }
             }
 
+            // Transition banner overlay pinned to bottom of viewport
+            if transitionCountdown > 0,
+               state.currentSectionIndex < state.sections.count - 1 {
+                let next = state.sections[state.currentSectionIndex + 1]
+                VStack {
+                    Spacer()
+                    slideTransitionBanner(nextSection: next, countdown: transitionCountdown)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Play countdown overlay
             if playCountdown > 0 {
                 playCountdownOverlay
@@ -241,10 +254,6 @@ struct TeleprompterTextView: View {
 
     private func currentSectionContent(content: String, accentColor: Color) -> some View {
         let paragraphs = content.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let isLastSection = state.currentSectionIndex >= state.sections.count - 1
-        let nextSection: TeleprompterSection? = !isLastSection
-            ? state.sections[state.currentSectionIndex + 1]
-            : nil
 
         return VStack(alignment: .leading, spacing: state.fontSize * 0.4) {
             ForEach(Array(paragraphs.enumerated()), id: \.offset) { pIdx, paragraph in
@@ -255,28 +264,19 @@ struct TeleprompterTextView: View {
                 )
                 .id("para-\(state.currentSectionIndex)-\(pIdx)")
             }
-
-            // Slide transition countdown banner
-            if transitionCountdown > 0, let next = nextSection {
-                slideTransitionBanner(
-                    nextSection: next,
-                    countdown: transitionCountdown
-                )
-                .id("para-\(state.currentSectionIndex)-transition")
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
         }
     }
 
     private func slideTransitionBanner(nextSection: TeleprompterSection, countdown: Double) -> some View {
         let nextColor = Color(hex: nextSection.accentColorHex) ?? .blue
         let seconds = Int(ceil(countdown))
+        let preview = nextSectionPreview(nextSection.content, maxLines: 1)
 
-        return VStack(spacing: 8) {
+        return VStack(spacing: 0) {
             Rectangle()
-                .fill(nextColor.opacity(0.3))
+                .fill(nextColor.opacity(0.4))
                 .frame(height: 1)
-                .padding(.vertical, 8)
+                .padding(.bottom, 10)
 
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
@@ -290,19 +290,28 @@ struct TeleprompterTextView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("NEXT SLIDE")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(nextColor.opacity(0.7))
+                        .foregroundStyle(nextColor.opacity(0.9))
 
                     Text(nextSection.label)
                         .font(.system(size: state.fontSize * 0.65, weight: .medium))
-                        .foregroundStyle(nextColor.opacity(0.5))
+                        .foregroundStyle(nextColor.opacity(0.7))
                         .lineLimit(1)
                 }
 
                 Spacer()
 
+                if !preview.isEmpty {
+                    Text(preview)
+                        .font(.system(size: state.fontSize * 0.7, weight: .medium))
+                        .foregroundStyle(nextColor.opacity(0.8))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 Text("\(seconds)")
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundStyle(nextColor.opacity(0.6))
+                    .foregroundStyle(nextColor.opacity(0.8))
 
                 Button {
                     skipTransition()
@@ -314,7 +323,7 @@ struct TeleprompterTextView: View {
                         .padding(.vertical, 4)
                         .background {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(nextColor.opacity(0.15))
+                                .fill(nextColor.opacity(0.2))
                         }
                 }
                 .buttonStyle(.plain)
@@ -323,20 +332,8 @@ struct TeleprompterTextView: View {
             .padding(.vertical, 10)
             .background {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(nextColor.opacity(0.08))
-                    .strokeBorder(nextColor.opacity(0.15), lineWidth: 1)
-            }
-
-            // Preview of the next slide's opening lines
-            let preview = nextSectionPreview(nextSection.content, maxLines: 2)
-            if !preview.isEmpty {
-                Text(preview)
-                    .font(.system(size: state.fontSize * 0.85))
-                    .lineSpacing(state.fontSize * 0.35)
-                    .foregroundStyle(nextColor.opacity(0.4))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
+                    .fill(nextColor.opacity(0.15))
+                    .strokeBorder(nextColor.opacity(0.3), lineWidth: 1)
             }
         }
         .padding(.top, 12)
@@ -718,7 +715,8 @@ struct TeleprompterTextView: View {
         }
 
         let section = state.sections[state.currentSectionIndex]
-        guard let newTimeline = buildTimeline(for: section.content, wpm: state.scrollSpeed) else {
+        guard let newTimeline = buildTimeline(for: section.content, wpm: state.scrollSpeed),
+              !newTimeline.words.isEmpty else {
             return
         }
 
@@ -751,15 +749,14 @@ struct TeleprompterTextView: View {
 
     private func startTimer() {
         timer?.invalidate()
+        timer = nil
         let interval: TimeInterval = 1.0 / 20.0
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            Task { @MainActor in
-                guard state.isPlaying else {
-                    stopAutoAdvance()
-                    return
-                }
-                tickPlayback(interval)
+            guard state.isPlaying else {
+                stopAutoAdvance()
+                return
             }
+            tickPlayback(interval)
         }
     }
 
@@ -786,11 +783,6 @@ struct TeleprompterTextView: View {
         let isNotLastSection = state.currentSectionIndex < state.sections.count - 1
         if sectionElapsed >= tl.wordsEndTime && isNotLastSection {
             let newCountdown = max(0, tl.totalDuration - sectionElapsed)
-            if transitionCountdown <= 0 && newCountdown > 0 {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    scrollProxy?.scrollTo("para-\(state.currentSectionIndex)-transition", anchor: .center)
-                }
-            }
             transitionCountdown = newCountdown
         } else {
             transitionCountdown = 0

@@ -54,6 +54,8 @@ struct TeleprompterControlsView: View {
                 } label: {
                     Image(systemName: "minus")
                         .font(.system(size: 10))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -71,6 +73,8 @@ struct TeleprompterControlsView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 10))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

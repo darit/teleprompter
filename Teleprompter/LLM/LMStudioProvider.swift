@@ -30,17 +30,22 @@ final class LMStudioProvider: LLMProvider, @unchecked Sendable {
         let url = baseURL.appendingPathComponent("/v1/models")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 3
+        request.timeoutInterval = 2
 
         var reachable = false
-        let task = session.dataTask(with: request) { _, response, _ in
+        // Use a dedicated session to avoid interfering with the main session on app close
+        let checkConfig = URLSessionConfiguration.ephemeral
+        checkConfig.timeoutIntervalForRequest = 2
+        let checkSession = URLSession(configuration: checkConfig)
+        let task = checkSession.dataTask(with: request) { _, response, _ in
             if let http = response as? HTTPURLResponse, http.statusCode == 200 {
                 reachable = true
             }
             semaphore.signal()
         }
         task.resume()
-        semaphore.wait()
+        _ = semaphore.wait(timeout: .now() + 3)
+        checkSession.invalidateAndCancel()
         return reachable
     }
 
@@ -86,8 +91,23 @@ final class LMStudioProvider: LLMProvider, @unchecked Sendable {
     // MARK: - Internal (visible for testing)
 
     func buildRequestBody(messages: [ChatMessage]) -> [String: Any] {
-        let messageDicts: [[String: String]] = messages.map { msg in
-            ["role": msg.role.rawValue, "content": msg.content]
+        let messageDicts: [[String: Any]] = messages.map { msg in
+            if msg.images.isEmpty {
+                return ["role": msg.role.rawValue, "content": msg.content]
+            }
+            // OpenAI vision format: content is an array of text and image_url objects
+            var contentParts: [[String: Any]] = [
+                ["type": "text", "text": msg.content]
+            ]
+            for imageData in msg.images {
+                let base64 = imageData.base64EncodedString()
+                let mimeType = imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "image/png" : "image/jpeg"
+                contentParts.append([
+                    "type": "image_url",
+                    "image_url": ["url": "data:\(mimeType);base64,\(base64)"]
+                ])
+            }
+            return ["role": msg.role.rawValue, "content": contentParts]
         }
 
         var body: [String: Any] = [

@@ -7,6 +7,8 @@ struct SlideContent: Identifiable, Sendable {
     let title: String
     let bodyText: String
     let notes: String
+    /// Images extracted from this slide (PNG/JPEG data)
+    let images: [Data]
 
     var isEmpty: Bool {
         title.isEmpty && bodyText.isEmpty

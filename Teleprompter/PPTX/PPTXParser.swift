@@ -63,11 +63,38 @@ enum PPTXParser {
             let noteFile = slideFile.replacingOccurrences(of: "slides/slide", with: "notesSlides/notesSlide")
             let notePath = "ppt/\(noteFile)"
             let noteURL = tempDir.appendingPathComponent(notePath)
+            var notes = ""
             if let noteData = try? Data(contentsOf: noteURL) {
-                let notes = extractNotes(from: noteData)
-                slide = SlideContent(slideNumber: slide.slideNumber, title: slide.title, bodyText: slide.bodyText, notes: notes)
+                notes = extractNotes(from: noteData)
             }
 
+            // Extract images referenced by this slide
+            let slideRelsFile = slideFile.replacingOccurrences(of: "slides/", with: "slides/_rels/") + ".rels"
+            let slideRelsPath = "ppt/\(slideRelsFile)"
+            let slideRelsURL = tempDir.appendingPathComponent(slideRelsPath)
+            var slideImages: [Data] = []
+            if let slideRelsData = try? Data(contentsOf: slideRelsURL) {
+                let slideRels = extractRelationships(from: slideRelsData)
+                for (_, target) in slideRels {
+                    if target.contains("media/") {
+                        let mediaPath = target.hasPrefix("../")
+                            ? "ppt/\(target.replacingOccurrences(of: "../", with: ""))"
+                            : "ppt/\(target)"
+                        let mediaURL = tempDir.appendingPathComponent(mediaPath)
+                        if let imageData = try? Data(contentsOf: mediaURL) {
+                            slideImages.append(imageData)
+                        }
+                    }
+                }
+            }
+
+            slide = SlideContent(
+                slideNumber: slide.slideNumber,
+                title: slide.title,
+                bodyText: slide.bodyText,
+                notes: notes,
+                images: slideImages
+            )
             slides.append(slide)
         }
 
@@ -89,7 +116,8 @@ enum PPTXParser {
             slideNumber: slideNumber,
             title: parser.titleText.joined(separator: " "),
             bodyText: parser.bodyParagraphs.joined(separator: "\n"),
-            notes: ""
+            notes: "",
+            images: []
         )
     }
 
