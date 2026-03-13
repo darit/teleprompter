@@ -53,6 +53,7 @@ struct ChatMessageView: View {
             } label: {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             .help("Copy message")
@@ -65,6 +66,7 @@ struct ChatMessageView: View {
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Regenerate response")
