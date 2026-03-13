@@ -123,7 +123,7 @@ struct SettingsView: View {
 
             Image(systemName: "play.rectangle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.accent)
+                .foregroundStyle(.tint)
 
             Text("Teleprompter")
                 .font(.system(size: 22, weight: .bold))
