@@ -59,6 +59,51 @@ struct ConversationManagerTests {
 
         #expect(scriptSegments.count == 2)
     }
+    @Test("stopStreaming finalizes partial text as assistant message")
+    @MainActor
+    func testStopStreaming() async {
+        let manager = ConversationManager.makeTestInstance()
+        manager.isStreaming = true
+        manager.currentStreamingText = "Partial response text"
+
+        manager.stopStreaming()
+
+        #expect(manager.isStreaming == false)
+        #expect(manager.currentStreamingText.isEmpty)
+        let lastVisible = manager.visibleMessages.last
+        #expect(lastVisible?.role == .assistant)
+        #expect(lastVisible?.content == "Partial response text")
+    }
+
+    @Test("regenerateLastResponse removes last assistant message")
+    @MainActor
+    func testRegenerateRemovesLastAssistant() {
+        let manager = ConversationManager.makeTestInstance()
+        let userMsg = ChatMessage(role: .user, content: "Write slide 1")
+        let assistantMsg = ChatMessage(role: .assistant, content: "Here is slide 1 content")
+        manager.messages.append(userMsg)
+        manager.messages.append(assistantMsg)
+
+        let countBefore = manager.messages.count
+        manager.removeLastAssistantMessage()
+
+        #expect(manager.messages.count == countBefore - 1)
+        #expect(manager.messages.last?.role == .user)
+    }
+
+    @Test("parseStreamingChunk detects script markers incrementally")
+    func testParseStreamingChunkDetectsMarkers() {
+        var buffer = ""
+
+        buffer += "Here is the script:\n\n"
+        let result1 = ConversationManager.parseStreamingBuffer(buffer)
+        #expect(result1.activeSlideNumber == nil)
+
+        buffer += "[SCRIPT_START slide=2]\nSome content"
+        let result2 = ConversationManager.parseStreamingBuffer(buffer)
+        #expect(result2.activeSlideNumber == 2)
+        #expect(result2.partialContent == "Some content")
+    }
 }
 
 extension ConversationManager {

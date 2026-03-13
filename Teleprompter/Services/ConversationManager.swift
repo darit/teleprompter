@@ -8,8 +8,11 @@ final class ConversationManager {
     var isStreaming = false
     var currentStreamingText = ""
     var error: String?
+    var activelyStreamingSlideNumber: Int?
 
-    private let provider: any LLMProvider
+    private var streamingTask: Task<Void, Never>?
+
+    private(set) var provider: any LLMProvider
     private let slides: [SlideContent]
     private let script: Script
     private let targetDurationMinutes: Int?
@@ -29,12 +32,20 @@ final class ConversationManager {
             targetDurationMinutes: targetDurationMinutes
         )
         messages.append(ChatMessage(role: .system, content: systemPrompt))
+
+        // Restore persisted chat history
+        let sorted = script.chatHistory.sorted { $0.order < $1.order }
+        for persisted in sorted {
+            messages.append(persisted.toChatMessage())
+        }
     }
 
     /// Send a user message and stream the response.
     @MainActor
     func send(_ userMessage: String) async {
-        messages.append(ChatMessage(role: .user, content: userMessage))
+        let userMsg = ChatMessage(role: .user, content: userMessage)
+        messages.append(userMsg)
+        persistMessage(userMsg)
         await streamResponse()
     }
 
@@ -44,36 +55,127 @@ final class ConversationManager {
         await streamResponse()
     }
 
+    /// Clear all chat history (keeps system prompt).
+    @MainActor
+    func clearHistory() {
+        // Remove all non-system messages
+        messages.removeAll { $0.role != .system }
+
+        // Clear persisted history
+        for persisted in script.chatHistory {
+            modelContext.delete(persisted)
+        }
+        script.chatHistory.removeAll()
+
+        error = nil
+        currentStreamingText = ""
+    }
+
+    @MainActor
+    func stopStreaming() {
+        streamingTask?.cancel()
+        streamingTask = nil
+        if isStreaming {
+            let partial = currentStreamingText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !partial.isEmpty {
+                let assistantMsg = ChatMessage(role: .assistant, content: partial)
+                messages.append(assistantMsg)
+                persistMessage(assistantMsg)
+                let segments = Self.parseResponse(partial)
+                for segment in segments {
+                    if case .script(let slideNumber) = segment.type {
+                        updateScriptSection(slideNumber: slideNumber, content: segment.content)
+                    }
+                }
+            }
+            currentStreamingText = ""
+            isStreaming = false
+            activelyStreamingSlideNumber = nil
+        }
+    }
+
+    @MainActor
+    func removeLastAssistantMessage() {
+        guard let lastIndex = messages.lastIndex(where: { $0.role == .assistant }) else { return }
+        let removedMessage = messages.remove(at: lastIndex)
+        if let lastPersisted = script.chatHistory
+            .sorted(by: { $0.order < $1.order })
+            .last(where: { $0.role == "assistant" }) {
+            modelContext.delete(lastPersisted)
+            script.chatHistory.removeAll { $0 === lastPersisted }
+        }
+        let segments = Self.parseResponse(removedMessage.content)
+        for segment in segments {
+            if case .script(let slideNumber) = segment.type {
+                if let section = script.sections.first(where: { $0.slideNumber == slideNumber }) {
+                    section.content = ""
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func regenerateLastResponse() async {
+        removeLastAssistantMessage()
+        await streamResponse()
+    }
+
     @MainActor
     private func streamResponse() async {
         isStreaming = true
         currentStreamingText = ""
         error = nil
 
-        do {
-            let stream = try await provider.stream(messages: messages)
+        streamingTask = Task {
+            do {
+                let stream = try await provider.stream(messages: messages)
 
-            for await chunk in stream {
-                currentStreamingText += chunk
-            }
+                for await chunk in stream {
+                    if Task.isCancelled { break }
+                    currentStreamingText += chunk
 
-            let response = currentStreamingText.trimmingCharacters(in: .whitespacesAndNewlines)
-            messages.append(ChatMessage(role: .assistant, content: response))
+                    // Live parsing for streaming preview
+                    let parseResult = Self.parseStreamingBuffer(currentStreamingText)
+                    activelyStreamingSlideNumber = parseResult.activeSlideNumber
+                    if let slideNum = parseResult.activeSlideNumber, let partial = parseResult.partialContent {
+                        updateScriptSection(slideNumber: slideNum, content: partial)
+                    }
+                }
 
-            // Parse response for script markers and update sections
-            let segments = Self.parseResponse(response)
-            for segment in segments {
-                if case .script(let slideNumber) = segment.type {
-                    updateScriptSection(slideNumber: slideNumber, content: segment.content)
+                guard !Task.isCancelled else { return }
+
+                let response = currentStreamingText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let assistantMsg = ChatMessage(role: .assistant, content: response)
+                messages.append(assistantMsg)
+                persistMessage(assistantMsg)
+
+                // Parse response for script markers and update sections
+                let segments = Self.parseResponse(response)
+                for segment in segments {
+                    if case .script(let slideNumber) = segment.type {
+                        updateScriptSection(slideNumber: slideNumber, content: segment.content)
+                    }
+                }
+
+                currentStreamingText = ""
+            } catch {
+                if !Task.isCancelled {
+                    self.error = error.localizedDescription
                 }
             }
 
-            currentStreamingText = ""
-        } catch {
-            self.error = error.localizedDescription
+            isStreaming = false
+            activelyStreamingSlideNumber = nil
         }
 
-        isStreaming = false
+        await streamingTask?.value
+    }
+
+    private func persistMessage(_ message: ChatMessage) {
+        let order = script.chatHistory.count
+        let persisted = PersistedChatMessage.from(message, order: order)
+        script.chatHistory.append(persisted)
+        script.modifiedAt = .now
     }
 
     private func updateScriptSection(slideNumber: Int, content: String) {
@@ -154,6 +256,44 @@ final class ConversationManager {
         return segments
     }
 
+    // MARK: - Streaming Buffer Parsing
+
+    struct StreamingParseResult {
+        let activeSlideNumber: Int?
+        let partialContent: String?
+    }
+
+    static func parseStreamingBuffer(_ buffer: String) -> StreamingParseResult {
+        let startPattern = /\[SCRIPT_START\s+slide=(\d+)\]/
+        let endMarker = "[SCRIPT_END]"
+
+        var lastSlideNumber: Int?
+        var lastStartEnd: String.Index?
+        var remaining = buffer[buffer.startIndex...]
+
+        while let match = remaining.firstMatch(of: startPattern) {
+            lastSlideNumber = Int(match.1)
+            lastStartEnd = match.range.upperBound
+            remaining = remaining[match.range.upperBound...]
+        }
+
+        guard let slideNumber = lastSlideNumber, let contentStart = lastStartEnd else {
+            return StreamingParseResult(activeSlideNumber: nil, partialContent: nil)
+        }
+
+        let afterStart = String(buffer[contentStart...])
+
+        if afterStart.contains(endMarker) {
+            return StreamingParseResult(activeSlideNumber: nil, partialContent: nil)
+        }
+
+        let partialContent = afterStart.trimmingCharacters(in: .whitespacesAndNewlines)
+        return StreamingParseResult(
+            activeSlideNumber: slideNumber,
+            partialContent: partialContent.isEmpty ? nil : partialContent
+        )
+    }
+
     // MARK: - Computed Properties for Views
 
     /// Messages visible in the chat (excludes the system prompt).
@@ -169,5 +309,10 @@ final class ConversationManager {
     /// Provider display name.
     var providerName: String {
         provider.displayName
+    }
+
+    /// Swap to a different provider without losing conversation history.
+    func switchProvider(_ newProvider: any LLMProvider) {
+        provider = newProvider
     }
 }
