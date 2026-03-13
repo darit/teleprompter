@@ -65,6 +65,12 @@ final class ClaudeCLIProvider: LLMProvider, @unchecked Sendable {
                     process.standardOutput = outputPipe
                     process.standardError = errorPipe
 
+                    continuation.onTermination = { _ in
+                        if process.isRunning {
+                            process.terminate()
+                        }
+                    }
+
                     try process.run()
 
                     // Write prompt to stdin and close
@@ -84,7 +90,8 @@ final class ClaudeCLIProvider: LLMProvider, @unchecked Sendable {
 
                     process.waitUntilExit()
 
-                    if process.terminationStatus != 0 {
+                    if process.terminationStatus != 0 && process.terminationStatus != 15 {
+                        // 15 = SIGTERM from cancellation, expected
                         let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
                         let errMsg = String(data: errData, encoding: .utf8) ?? "Unknown error"
                         continuation.yield("\n\n[Error: Claude CLI exited with code \(process.terminationStatus): \(errMsg)]")
