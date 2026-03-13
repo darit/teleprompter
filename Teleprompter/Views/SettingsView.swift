@@ -114,7 +114,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .padding(.top, 8)
     }
-}
 
     // MARK: - About Tab
 
