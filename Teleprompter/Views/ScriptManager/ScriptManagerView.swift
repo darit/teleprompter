@@ -172,17 +172,30 @@ struct ScriptManagerView: View {
     }
 
     private func openAssistantWindow(data: AssistantData) {
-        // Close existing assistant window if any and let it finish tearing down
-        if let existing = assistantWindow {
-            existing.contentView = nil
-            existing.close()
-            assistantWindow = nil
-        }
+        // Defer ALL window manipulation to escape the SwiftUI render cycle.
+        // Modifying NSWindow contentView during body evaluation crashes when a
+        // TextEditor (_NSTextContentView) has focus — AppKit sends setContentView:
+        // to the focused text view instead of the window during a CA commit.
+        let ctx = modelContext
+        let existingWindow = assistantWindow
+        assistantWindow = nil
 
-        // Delay creation to let the old view hierarchy finish cleanup
         DispatchQueue.main.async {
-            let contentView = ScriptAssistantView(script: data.script, slides: data.slides, initialSnapshots: data.initialSnapshots)
-                .environment(\.modelContext, modelContext)
+            if let existing = existingWindow {
+                existing.orderOut(nil)
+                existing.contentView = nil
+                existing.close()
+            }
+
+            let contentView = ScriptAssistantView(
+                script: data.script,
+                slides: data.slides,
+                initialSnapshots: data.initialSnapshots
+            )
+            .environment(\.modelContext, ctx)
+
+            let hostingView = NSHostingView(rootView: contentView)
+            hostingView.autoresizingMask = [.width, .height]
 
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 1200, height: 780),
@@ -191,12 +204,12 @@ struct ScriptManagerView: View {
                 defer: false
             )
             window.title = "Script Assistant"
-            window.contentView = NSHostingView(rootView: contentView)
+            window.contentView = hostingView
             window.minSize = NSSize(width: 900, height: 600)
             window.center()
             window.makeKeyAndOrderFront(nil)
 
-            assistantWindow = window
+            self.assistantWindow = window
         }
     }
 }
