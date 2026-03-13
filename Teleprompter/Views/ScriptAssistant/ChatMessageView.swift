@@ -2,38 +2,81 @@ import SwiftUI
 
 struct ChatMessageView: View {
     let message: ChatMessage
+    let isLastAssistantMessage: Bool
+    @State private var isHovered = false
+
+    init(message: ChatMessage, isLastAssistantMessage: Bool = false) {
+        self.message = message
+        self.isLastAssistantMessage = isLastAssistantMessage
+    }
 
     var body: some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 60) }
+        VStack(alignment: .leading, spacing: 6) {
+            // Role label
+            Text(message.role == .user ? "You" : "Assistant")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
 
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
-                let segments = parseSegments(message.content)
-                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                    switch segment {
-                    case .text(let text):
-                        Text(attributedMarkdown(text))
-                            .font(.system(size: 13))
-                            .lineSpacing(4)
-                            .textSelection(.enabled)
-                            .padding(12)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(message.role == .user
-                                          ? Color.accentColor.opacity(0.08)
-                                          : Color.primary.opacity(0.04))
-                            }
-                            .frame(maxWidth: 500, alignment: message.role == .user ? .trailing : .leading)
+            // Message content
+            let segments = parseSegments(message.content)
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .text(let text):
+                    MarkdownContentView(text: text)
 
-                    case .script(let slideNumber, let content):
-                        scriptBlock(slideNumber: slideNumber, content: content)
-                            .frame(maxWidth: 500, alignment: .leading)
-                    }
+                case .script(let slideNumber, let content):
+                    scriptBlock(slideNumber: slideNumber, content: content)
                 }
             }
-
-            if message.role == .assistant { Spacer(minLength: 60) }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            if isHovered {
+                messageActions
+                    .transition(.opacity)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var messageActions: some View {
+        HStack(spacing: 4) {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(message.content, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help("Copy message")
+
+            if message.role == .assistant && isLastAssistantMessage {
+                Button {
+                    NotificationCenter.default.post(
+                        name: .regenerateLastResponse, object: nil
+                    )
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .help("Regenerate response")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+        }
+        .padding(8)
     }
 
     private func scriptBlock(slideNumber: Int, content: String) -> some View {
@@ -50,8 +93,8 @@ struct ChatMessageView: View {
             }
 
             Text(attributedMarkdown(content))
-                .font(.system(size: 13))
-                .lineSpacing(4)
+                .font(.system(size: 14))
+                .lineSpacing(5)
                 .textSelection(.enabled)
                 .foregroundStyle(.primary.opacity(0.85))
         }
@@ -69,6 +112,10 @@ struct ChatMessageView: View {
     private func attributedMarkdown(_ text: String) -> AttributedString {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
+}
+
+extension Notification.Name {
+    static let regenerateLastResponse = Notification.Name("regenerateLastResponse")
 }
 
 // MARK: - Segment Parsing
@@ -131,7 +178,7 @@ private func parseSegments(_ text: String) -> [MessageSegment] {
     [SCRIPT_END]
 
     Now, for slide 2 -- can you tell me more about the performance improvements you mentioned?
-    """))
+    """), isLastAssistantMessage: true)
     .padding()
 }
 

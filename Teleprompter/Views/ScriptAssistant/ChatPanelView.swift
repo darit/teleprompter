@@ -8,44 +8,34 @@ struct ChatPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Context bar
-            HStack(spacing: 8) {
-                Text("\(conversation.slideCount) slides loaded")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(conversation.providerName)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial)
-
-            Divider()
-
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(conversation.visibleMessages) { message in
-                            ChatMessageView(message: message)
-                                .id(message.id)
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(conversation.visibleMessages.enumerated()), id: \.element.id) { index, message in
+                            let isLastAssistant = message.role == .assistant &&
+                                message.id == conversation.visibleMessages.last(where: { $0.role == .assistant })?.id
+
+                            ChatMessageView(message: message, isLastAssistantMessage: isLastAssistant)
+
+                            if index < conversation.visibleMessages.count - 1 {
+                                Divider()
+                                    .padding(.horizontal, 16)
+                            }
                         }
 
                         if conversation.isStreaming {
-                            streamingBubble
+                            Divider()
+                                .padding(.horizontal, 16)
+                            streamingMessageView
                                 .id("streaming")
                         }
 
-                        // Invisible anchor at the very bottom
                         Color.clear
                             .frame(height: 1)
                             .id("bottom")
                     }
-                    .padding(16)
+                    .padding(.vertical, 12)
                 }
                 .defaultScrollAnchor(.bottom)
                 .onChange(of: conversation.messages.count) {
@@ -70,58 +60,77 @@ struct ChatPanelView: View {
                 .padding(8)
             }
 
-            Divider()
-
             // Input bar
-            HStack(spacing: 8) {
-                TextField("Type a message...", text: $inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-                    .onSubmit {
-                        sendMessage()
-                    }
+            VStack(spacing: 0) {
+                Divider()
 
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 22))
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Ask about your script...", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...8)
+                        .font(.system(size: 14))
+                        .focused($isInputFocused)
+                        .onSubmit {
+                            sendMessage()
+                        }
+
+                    Button {
+                        if conversation.isStreaming {
+                            conversation.stopStreaming()
+                        } else {
+                            sendMessage()
+                        }
+                    } label: {
+                        Image(systemName: conversation.isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(conversation.isStreaming ? .red : .accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!conversation.isStreaming && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .buttonStyle(.plain)
-                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || conversation.isStreaming)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color(nsColor: .quaternaryLabelColor), lineWidth: 0.5)
+                        }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
-            .padding(12)
-            .background(.ultraThinMaterial)
         }
         .onAppear {
             isInputFocused = true
         }
-    }
-
-    private var streamingBubble: some View {
-        HStack {
-            let displayText = conversation.currentStreamingText.isEmpty
-                ? "Thinking..."
-                : conversation.currentStreamingText
-
-            Text(attributedMarkdown(displayText))
-                .font(.system(size: 13))
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .padding(12)
-                .background {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.04))
-                }
-                .frame(maxWidth: 500, alignment: .leading)
-
-            Spacer(minLength: 60)
+        .onReceive(NotificationCenter.default.publisher(for: .regenerateLastResponse)) { _ in
+            Task {
+                await conversation.regenerateLastResponse()
+            }
         }
     }
 
-    private func attributedMarkdown(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+    private var streamingMessageView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Assistant")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            if conversation.currentStreamingText.isEmpty {
+                TypingIndicatorView()
+            } else {
+                HStack(alignment: .bottom, spacing: 0) {
+                    MarkdownContentView(text: conversation.currentStreamingText)
+
+                    BlinkingCursorView()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func sendMessage() {
@@ -131,5 +140,21 @@ struct ChatPanelView: View {
         Task {
             await conversation.send(text)
         }
+    }
+}
+
+private struct BlinkingCursorView: View {
+    @State private var visible = true
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary)
+            .frame(width: 2, height: 16)
+            .opacity(visible ? 1 : 0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.53).repeatForever(autoreverses: true)) {
+                    visible = false
+                }
+            }
     }
 }
