@@ -107,8 +107,7 @@ struct TeleprompterTextView: View {
                 VStack {
                     Spacer()
                     slideTransitionBanner(nextSection: next, countdown: transitionCountdown)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, 0)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -274,9 +273,8 @@ struct TeleprompterTextView: View {
 
         return VStack(spacing: 0) {
             Rectangle()
-                .fill(nextColor.opacity(0.4))
-                .frame(height: 1)
-                .padding(.bottom, 10)
+                .fill(nextColor)
+                .frame(height: 2)
 
             HStack(spacing: 12) {
                 HStack(spacing: 4) {
@@ -288,55 +286,50 @@ struct TeleprompterTextView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("NEXT SLIDE")
+                    Text("NEXT")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(nextColor.opacity(0.9))
+                        .foregroundStyle(nextColor)
 
                     Text(nextSection.label)
-                        .font(.system(size: state.fontSize * 0.65, weight: .medium))
-                        .foregroundStyle(nextColor.opacity(0.7))
+                        .font(.system(size: state.fontSize * 0.7, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
                 }
 
-                Spacer()
-
                 if !preview.isEmpty {
                     Text(preview)
-                        .font(.system(size: state.fontSize * 0.7, weight: .medium))
-                        .foregroundStyle(nextColor.opacity(0.8))
+                        .font(.system(size: state.fontSize * 0.65))
+                        .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                Spacer()
+
                 Text("\(seconds)")
-                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundStyle(nextColor.opacity(0.8))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundStyle(nextColor)
 
                 Button {
                     skipTransition()
                 } label: {
                     Text("SKIP")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(nextColor)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(nextColor.opacity(0.2))
+                                .fill(nextColor.opacity(0.4))
                         }
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(nextColor.opacity(0.15))
-                    .strokeBorder(nextColor.opacity(0.3), lineWidth: 1)
-            }
         }
-        .padding(.top, 12)
+        .background(Color(white: 0.1))
     }
 
     /// Extracts the first couple of lines from the next section, stripping stage directions.
@@ -751,13 +744,18 @@ struct TeleprompterTextView: View {
         timer?.invalidate()
         timer = nil
         let interval: TimeInterval = 1.0 / 20.0
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-            guard state.isPlaying else {
-                stopAutoAdvance()
-                return
+        // Use common run loop mode so the timer fires even during tracking
+        // and defer state mutations to avoid CA commit conflicts
+        timer = Timer(timeInterval: interval, repeats: true) { _ in
+            DispatchQueue.main.async {
+                guard state.isPlaying else {
+                    stopAutoAdvance()
+                    return
+                }
+                tickPlayback(interval)
             }
-            tickPlayback(interval)
         }
+        RunLoop.main.add(timer!, forMode: .common)
     }
 
     private func tickPlayback(_ dt: Double) {
