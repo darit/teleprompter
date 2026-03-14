@@ -97,10 +97,11 @@ struct ScriptManagerView: View {
                 // Yield to let SwiftUI / CA finish the current transaction
                 await Task.yield()
 
+                // Generate previews BEFORE opening assistant so thumbnails are ready
+                await generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
+
                 let snapshots = script.sections.map { $0.toSnapshot() }
                 assistantData = AssistantData(script: script, slides: slides, initialSnapshots: snapshots)
-
-                generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
             }
 
             if !result.warnings.isEmpty {
@@ -196,31 +197,29 @@ struct ScriptManagerView: View {
 
     /// Generate and persist slide preview images, then save to model context.
     @MainActor
-    private func generateSlidePreviews(for script: Script, slides: [SlideContent], pptxURL: URL) {
+    private func generateSlidePreviews(for script: Script, slides: [SlideContent], pptxURL: URL) async {
         let ctx = modelContext
         let sectionIndex = Dictionary(script.sections.map { ($0.slideNumber, $0) }, uniquingKeysWith: { a, _ in a })
 
         // Try LibreOffice in background if available, otherwise card-render immediately
         if SlideRenderer.isAvailable {
-            Task {
-                let renders = await Task.detached {
-                    (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
-                }.value
-                let renderIndex = Dictionary(renders.map { ($0.slideNumber, $0.data) }, uniquingKeysWith: { a, _ in a })
+            let renders = await Task.detached {
+                (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
+            }.value
+            let renderIndex = Dictionary(renders.map { ($0.slideNumber, $0.data) }, uniquingKeysWith: { a, _ in a })
 
-                for slide in slides {
-                    guard let section = sectionIndex[slide.slideNumber] else { continue }
-                    let imageData = renderIndex[slide.slideNumber] ?? SlideCardRenderer.render(slide: slide)
-                    if let imageData {
-                        let paths = SlideImageStore.save(images: [imageData], scriptId: script.storageId, slideNumber: slide.slideNumber, type: .preview)
-                        section.thumbnailRelativePath = paths.first
-                    }
-                    if !slide.images.isEmpty {
-                        SlideImageStore.saveRaw(images: slide.images, scriptId: script.storageId, slideNumber: slide.slideNumber)
-                    }
+            for slide in slides {
+                guard let section = sectionIndex[slide.slideNumber] else { continue }
+                let imageData = renderIndex[slide.slideNumber] ?? SlideCardRenderer.render(slide: slide)
+                if let imageData {
+                    let paths = SlideImageStore.save(images: [imageData], scriptId: script.storageId, slideNumber: slide.slideNumber, type: .preview)
+                    section.thumbnailRelativePath = paths.first
                 }
-                try? ctx.save()
+                if !slide.images.isEmpty {
+                    SlideImageStore.saveRaw(images: slide.images, scriptId: script.storageId, slideNumber: slide.slideNumber)
+                }
             }
+            try? ctx.save()
         } else {
             // No LibreOffice — render cards synchronously on main actor (fast)
             for slide in slides {
