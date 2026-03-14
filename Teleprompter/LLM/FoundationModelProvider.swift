@@ -9,6 +9,8 @@ final class FoundationModelProvider: LLMProvider, @unchecked Sendable {
 
     var supportsParallelGeneration: Bool { false }
 
+    var contextWindowSize: Int? { 4096 }
+
     var isAvailable: Bool {
         get async {
             let availability = SystemLanguageModel.default.availability

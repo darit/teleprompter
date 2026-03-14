@@ -5,9 +5,12 @@ import SwiftData
 struct ScriptDetailView: View {
     @Bindable var script: Script
     @State private var isEditingName = false
+    var isAssistantOpen: Bool = false
+    var generatingSlides: Set<Int> = []
     var onRefineWithAI: () -> Void = {}
     var onUpdatePPTX: () -> Void = {}
     var onPresent: () -> Void = {}
+    var onGenerateSlide: ((Int) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,7 +55,7 @@ struct ScriptDetailView: View {
                     .buttonStyle(.glass)
                     .help("Re-import slides from an updated PowerPoint file")
 
-                    Button("Refine with AI") {
+                    Button(isAssistantOpen ? "Hide Assistant" : "Refine with AI") {
                         onRefineWithAI()
                     }
                     .buttonStyle(.glass)
@@ -76,7 +79,12 @@ struct ScriptDetailView: View {
                         if index > 0 {
                             Divider().padding(.vertical, 4)
                         }
-                        SlideSectionView(section: section, fontSize: script.fontSize)
+                        SlideSectionView(
+                            section: section,
+                            fontSize: script.fontSize,
+                            isGenerating: generatingSlides.contains(section.slideNumber),
+                            onGenerate: onGenerateSlide
+                        )
                     }
 
                     if script.sections.isEmpty {
@@ -141,7 +149,7 @@ struct ScriptDetailView: View {
 }
 
 #Preview {
-    ScriptDetailView(script: PreviewSampleData.sampleScript(), onRefineWithAI: {}, onUpdatePPTX: {}, onPresent: {})
+    ScriptDetailView(script: PreviewSampleData.sampleScript(), isAssistantOpen: false, onRefineWithAI: {}, onUpdatePPTX: {}, onPresent: {})
         .modelContainer(PreviewSampleData.container)
         .frame(width: 700, height: 500)
 }

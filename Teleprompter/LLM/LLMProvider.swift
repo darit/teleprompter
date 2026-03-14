@@ -106,6 +106,14 @@ enum SpeechTone: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which LLM backend to use for script generation.
+enum ProviderChoice: String, CaseIterable {
+    case foundationModel = "Apple On-Device"
+    case mlxLocal = "Local Model (MLX)"
+    case claudeCLI = "Claude Code CLI"
+    case lmStudio = "LM Studio (Local)"
+}
+
 protocol LLMProvider: Sendable {
     /// Stream a response from the LLM given a conversation history.
     func stream(messages: [ChatMessage]) async throws -> AsyncStream<String>
@@ -119,9 +127,13 @@ protocol LLMProvider: Sendable {
     /// Whether this provider can handle multiple concurrent generation requests.
     /// Local models sharing a single GPU should return `false`.
     var supportsParallelGeneration: Bool { get }
+
+    /// Maximum context window size in tokens, or `nil` for unlimited / unknown.
+    var contextWindowSize: Int? { get }
 }
 
 // Default: existing providers (Claude CLI, LM Studio) support parallel generation
 extension LLMProvider {
     var supportsParallelGeneration: Bool { true }
+    var contextWindowSize: Int? { nil }
 }

@@ -8,7 +8,7 @@ import SwiftUI
 final class AppSettings {
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults(suiteName: "com.dannyrodriguez.Teleprompter.settings") ?? .standard
+    private let defaults = UserDefaults(suiteName: "com.darit.Teleprompter.settings") ?? .standard
 
     init() {
         migrateFromStandardIfNeeded()
@@ -127,6 +127,12 @@ final class AppSettings {
     var mlxMaxTokens: Int {
         get { defaults.object(forKey: "mlxMaxTokens") as? Int ?? 2048 }
         set { defaults.set(newValue, forKey: "mlxMaxTokens") }
+    }
+
+    /// Context window size for MLX models (tokens)
+    var mlxContextWindow: Int {
+        get { defaults.object(forKey: "mlxContextWindow") as? Int ?? 8192 }
+        set { defaults.set(newValue, forKey: "mlxContextWindow") }
     }
 
     /// Security-scoped bookmarks for user-granted local model folders (sandbox support).

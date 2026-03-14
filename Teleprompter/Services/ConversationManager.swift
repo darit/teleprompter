@@ -13,9 +13,9 @@ final class ConversationManager {
     var parallelGeneratingSlides: Set<Int> = []
     /// Whether a parallel "generate all" is in progress
     var isGeneratingAll = false
+    /// Estimated total tokens used across all messages
+    var estimatedTokensUsed: Int = 0
 
-    /// Called when script sections are updated (for preview refresh).
-    var onSectionsChanged: (() -> Void)?
 
     private var streamingTask: Task<Void, Never>?
     private var generateAllTask: Task<Void, Never>?
@@ -51,6 +51,8 @@ final class ConversationManager {
         for persisted in sorted {
             messages.append(persisted.toChatMessage())
         }
+
+        recalculateTokenUsage()
     }
 
     /// Send a user message and stream the response.
@@ -59,6 +61,7 @@ final class ConversationManager {
         let userMsg = ChatMessage(role: .user, content: userMessage)
         messages.append(userMsg)
         persistMessage(userMsg)
+        recalculateTokenUsage()
         await streamResponse()
     }
 
@@ -82,6 +85,7 @@ final class ConversationManager {
 
         error = nil
         currentStreamingText = ""
+        recalculateTokenUsage()
     }
 
     @MainActor
@@ -120,6 +124,7 @@ final class ConversationManager {
             script.chatHistory.removeAll { $0 === persisted }
         }
         try? modelContext.save()
+        recalculateTokenUsage()
     }
 
     @MainActor
@@ -277,6 +282,7 @@ final class ConversationManager {
         isStreaming = true
         currentStreamingText = ""
         error = nil
+        trimContextIfNeeded()
 
         streamingTask = Task {
             do {
@@ -325,6 +331,7 @@ final class ConversationManager {
                 ScriptBackupManager.backup(script: script)
 
                 currentStreamingText = ""
+                recalculateTokenUsage()
             } catch {
                 if !Task.isCancelled {
                     self.error = error.localizedDescription
@@ -368,8 +375,6 @@ final class ConversationManager {
         if updateTimestamp {
             script.modifiedAt = .now
         }
-        // Always notify so the preview panel refreshes during streaming
-        onSectionsChanged?()
     }
 
     // MARK: - Response Parsing (internal for testing)
@@ -485,5 +490,50 @@ final class ConversationManager {
     /// Swap to a different provider without losing conversation history.
     func switchProvider(_ newProvider: any LLMProvider) {
         provider = newProvider
+        recalculateTokenUsage()
+    }
+
+    // MARK: - Context Management
+
+    /// Ratio of estimated tokens used vs. context window (0.0–1.0), or nil if unlimited.
+    var contextUsageRatio: Double? {
+        guard let window = provider.contextWindowSize, window > 0 else { return nil }
+        return Double(estimatedTokensUsed) / Double(window)
+    }
+
+    /// Whether context usage is above 80%.
+    var isContextWarning: Bool {
+        guard let ratio = contextUsageRatio else { return false }
+        return ratio > 0.8
+    }
+
+    /// Whether context usage is above 95%.
+    var isContextCritical: Bool {
+        guard let ratio = contextUsageRatio else { return false }
+        return ratio > 0.95
+    }
+
+    /// Rough token estimate: chars / 4, plus overhead per message, plus image tokens.
+    func estimateTokens(for message: ChatMessage) -> Int {
+        let textTokens = max(1, message.content.count / 4)
+        let overhead = 4 // role + formatting tokens
+        let imageTokens = message.images.count * 256 // rough per-image estimate
+        return textTokens + overhead + imageTokens
+    }
+
+    /// Recalculate total token usage from all messages.
+    func recalculateTokenUsage() {
+        estimatedTokensUsed = messages.reduce(0) { $0 + estimateTokens(for: $1) }
+    }
+
+    /// Drop oldest non-system messages when exceeding 75% of context window.
+    private func trimContextIfNeeded() {
+        guard let window = provider.contextWindowSize, window > 0 else { return }
+        let threshold = Int(Double(window) * 0.75)
+        while estimatedTokensUsed > threshold {
+            guard let index = messages.firstIndex(where: { $0.role != .system }) else { break }
+            let removed = messages.remove(at: index)
+            estimatedTokensUsed -= estimateTokens(for: removed)
+        }
     }
 }

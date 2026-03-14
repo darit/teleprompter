@@ -37,17 +37,6 @@ final class ScriptSection {
         self.originalNotes = originalNotes
     }
 
-    /// Value-type snapshot for UI display (breaks SwiftData observation chain).
-    func toSnapshot() -> SectionSnapshot {
-        SectionSnapshot(
-            slideNumber: slideNumber,
-            label: label,
-            content: content,
-            accentColorHex: accentColorHex,
-            thumbnailRelativePath: thumbnailRelativePath ?? ""
-        )
-    }
-
     /// Reconstruct a SlideContent from the persisted original PPTX data.
     func toSlideContent() -> SlideContent {
         SlideContent(

@@ -6,17 +6,16 @@ import UniformTypeIdentifiers
 
 struct ScriptManagerView: View {
     @State private var selectedScript: Script?
-    @State private var assistantData: AssistantData?
+    @State private var showAssistant = false
+    @State private var conversation: ConversationManager?
+    @State private var selectedProvider: ProviderChoice = .foundationModel
+    @State private var selectedTone: SpeechTone = .conversational
+    @State private var targetMinutes: Int = 10
+    @State private var providerError: String?
+    @State private var showingProviderError = false
     @State private var importError: String?
     @State private var showingImportError = false
     @Environment(\.modelContext) private var modelContext
-
-    struct AssistantData: Identifiable {
-        let id = UUID()
-        let script: Script
-        let slides: [SlideContent]
-        let initialSnapshots: [SectionSnapshot]
-    }
 
     var body: some View {
         NavigationSplitView {
@@ -27,12 +26,48 @@ struct ScriptManagerView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
         } detail: {
             if let script = selectedScript {
-                ScriptDetailView(
-                    script: script,
-                    onRefineWithAI: { openAssistant(for: script) },
-                    onUpdatePPTX: { updatePPTX(for: script) },
-                    onPresent: { launchTeleprompter(for: script) }
-                )
+                HStack(spacing: 0) {
+                    ScriptDetailView(
+                        script: script,
+                        isAssistantOpen: showAssistant,
+                        generatingSlides: conversation?.parallelGeneratingSlides ?? [],
+                        onRefineWithAI: { toggleAssistant(for: script) },
+                        onUpdatePPTX: { updatePPTX(for: script) },
+                        onPresent: { launchTeleprompter(for: script) },
+                        onGenerateSlide: { slideNumber in
+                            Task {
+                                if conversation == nil {
+                                    await initializeConversation(for: script)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showAssistant = true
+                                    }
+                                }
+                                await conversation?.generateSlide(slideNumber)
+                            }
+                        }
+                    )
+
+                    if showAssistant, let conversation {
+                        Rectangle()
+                            .fill(Color(nsColor: .separatorColor))
+                            .frame(width: 1)
+
+                        AssistantPanelView(
+                            conversation: conversation,
+                            selectedProvider: $selectedProvider,
+                            selectedTone: $selectedTone,
+                            targetMinutes: $targetMinutes,
+                            onClose: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showAssistant = false
+                                }
+                            },
+                            onSwitchProvider: { switchProvider() }
+                        )
+                        .frame(width: 380)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
             } else {
                 ContentUnavailableView(
                     "No Script Selected",
@@ -41,10 +76,31 @@ struct ScriptManagerView: View {
                 )
             }
         }
-        .frame(minWidth: 700, minHeight: 450)
-        .onChange(of: assistantData?.id) {
-            guard let data = assistantData else { return }
-            openAssistantWindow(data: data)
+        .frame(minWidth: 900, minHeight: 450)
+        .task {
+            // Restore saved settings
+            if let saved = ProviderChoice(rawValue: AppSettings.shared.defaultProvider) {
+                selectedProvider = saved
+            }
+            if let savedTone = SpeechTone(rawValue: AppSettings.shared.speechTone) {
+                selectedTone = savedTone
+            }
+        }
+        .onChange(of: selectedScript) {
+            // Close assistant and nil out conversation when switching scripts
+            showAssistant = false
+            conversation = nil
+        }
+        .onChange(of: selectedTone) {
+            AppSettings.shared.speechTone = selectedTone.rawValue
+        }
+        .onChange(of: targetMinutes) {
+            selectedScript?.targetDuration = Double(targetMinutes)
+        }
+        .alert("Provider Unavailable", isPresented: $showingProviderError) {
+            Button("OK") {}
+        } message: {
+            Text(providerError ?? "")
         }
         .alert("Import Error", isPresented: $showingImportError) {
             Button("OK") {}
@@ -53,9 +109,128 @@ struct ScriptManagerView: View {
         }
     }
 
+    // MARK: - Assistant Panel
+
+    private func toggleAssistant(for script: Script) {
+        if showAssistant {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showAssistant = false
+            }
+            return
+        }
+
+        // Restore target duration from script if saved
+        if let saved = script.targetDuration, saved > 0 {
+            targetMinutes = Int(saved)
+        }
+
+        if conversation == nil {
+            Task {
+                await initializeConversation(for: script)
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showAssistant = true
+                }
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showAssistant = true
+            }
+        }
+    }
+
+    private func initializeConversation(for script: Script) async {
+        guard let provider = await makeProvider() else { return }
+
+        script.targetDuration = Double(targetMinutes)
+
+        let slides = script.sortedSections.map { $0.toSlideContent() }
+        conversation = ConversationManager(
+            provider: provider,
+            slides: slides,
+            script: script,
+            targetDurationMinutes: targetMinutes,
+            tone: selectedTone,
+            modelContext: modelContext
+        )
+    }
+
+    private func makeProvider() async -> (any LLMProvider)? {
+        switch selectedProvider {
+        case .foundationModel:
+            let fm = FoundationModelProvider()
+            guard await fm.isAvailable else {
+                providerError = "On-device AI requires Apple Silicon with macOS 26. The model may still be downloading."
+                showingProviderError = true
+                return nil
+            }
+            return fm
+        case .mlxLocal:
+            let manager = MLXModelManager.shared
+            if await manager.selectedModel == nil {
+                let savedId = AppSettings.shared.mlxSelectedModelId
+                if !savedId.isEmpty {
+                    for _ in 0..<10 {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        if await manager.selectedModel != nil { break }
+                    }
+                }
+            }
+            guard let modelInfo = await manager.selectedModel else {
+                providerError = "No local model selected. Open Settings -> Models to download one."
+                showingProviderError = true
+                return nil
+            }
+            if await manager.loadState != .loaded {
+                do {
+                    try await manager.loadModel(modelInfo)
+                } catch {
+                    providerError = "Failed to load model: \(error.localizedDescription)"
+                    showingProviderError = true
+                    return nil
+                }
+            }
+            return MLXProvider(modelInfo: modelInfo)
+        case .claudeCLI:
+            let claude = ClaudeCLIProvider(model: .sonnet)
+            guard await claude.isAvailable else {
+                providerError = "Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code"
+                showingProviderError = true
+                return nil
+            }
+            return claude
+        case .lmStudio:
+            let baseURL = URL(string: AppSettings.shared.lmStudioBaseURL) ?? URL(string: "http://localhost:1234")!
+            let lm = LMStudioProvider(baseURL: baseURL)
+            guard await lm.isAvailable else {
+                providerError = "LM Studio is not running. Please start LM Studio and load a model."
+                showingProviderError = true
+                return nil
+            }
+            return lm
+        }
+    }
+
+    private func switchProvider() {
+        Task {
+            if selectedProvider != .mlxLocal {
+                await MLXModelManager.shared.unloadModel()
+            }
+            if selectedProvider != .foundationModel,
+               let fm = conversation?.provider as? FoundationModelProvider {
+                fm.resetSession()
+            }
+            guard let provider = await makeProvider() else { return }
+            if let conversation {
+                conversation.switchProvider(provider)
+            } else if let script = selectedScript {
+                await initializeConversation(for: script)
+            }
+        }
+    }
+
+    // MARK: - PPTX Import
+
     private func importPPTX() {
-        // Defer to escape the current CA commit transaction — NSOpenPanel.runModal()
-        // opens a new transaction which crashes if called mid-commit.
         DispatchQueue.main.async { self.performImportPPTX() }
     }
 
@@ -90,18 +265,14 @@ struct ScriptManagerView: View {
             try? modelContext.save()
             selectedScript = script
 
-            // Defer assistant + preview work to escape the current CA commit.
             let slides = result.slides
             let pptxURL = url
             Task { @MainActor in
-                // Yield to let SwiftUI / CA finish the current transaction
                 await Task.yield()
-
-                // Generate previews BEFORE opening assistant so thumbnails are ready
                 await generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
 
-                let snapshots = script.sections.map { $0.toSnapshot() }
-                assistantData = AssistantData(script: script, slides: slides, initialSnapshots: snapshots)
+                // Open assistant panel after import
+                toggleAssistant(for: script)
             }
 
             if !result.warnings.isEmpty {
@@ -122,7 +293,6 @@ struct ScriptManagerView: View {
     }
 
     private func updatePPTX(for script: Script) {
-        // Defer to escape the current CA commit transaction
         DispatchQueue.main.async { self.performUpdatePPTX(for: script) }
     }
 
@@ -141,12 +311,10 @@ struct ScriptManagerView: View {
 
             for slide in result.slides {
                 if let existing = existingSections[slide.slideNumber] {
-                    // Update original PPTX content, keep generated script
                     existing.label = slide.title.isEmpty ? "Slide \(slide.slideNumber)" : slide.title
                     existing.originalBodyText = slide.bodyText
                     existing.originalNotes = slide.notes
                 } else {
-                    // New slide added to the presentation
                     let section = ScriptSection(
                         slideNumber: slide.slideNumber,
                         label: slide.title.isEmpty ? "Slide \(slide.slideNumber)" : slide.title,
@@ -160,7 +328,6 @@ struct ScriptManagerView: View {
                 }
             }
 
-            // Remove sections for slides that no longer exist
             let newSlideNumbers = Set(result.slides.map(\.slideNumber))
             let removedSections = script.sections.filter { !newSlideNumbers.contains($0.slideNumber) }
             for section in removedSections {
@@ -171,12 +338,11 @@ struct ScriptManagerView: View {
             script.modifiedAt = .now
             try? modelContext.save()
 
-            // Defer preview work to escape the current CA commit
             let slides = result.slides
             let pptxURL = url
             Task { @MainActor in
                 await Task.yield()
-                generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
+                await generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
             }
 
             if !result.warnings.isEmpty {
@@ -189,19 +355,11 @@ struct ScriptManagerView: View {
         }
     }
 
-    private func openAssistant(for script: Script) {
-        let slides = script.sortedSections.map { $0.toSlideContent() }
-        let snapshots = script.sections.map { $0.toSnapshot() }
-        assistantData = AssistantData(script: script, slides: slides, initialSnapshots: snapshots)
-    }
-
-    /// Generate and persist slide preview images, then save to model context.
     @MainActor
     private func generateSlidePreviews(for script: Script, slides: [SlideContent], pptxURL: URL) async {
         let ctx = modelContext
         let sectionIndex = Dictionary(script.sections.map { ($0.slideNumber, $0) }, uniquingKeysWith: { a, _ in a })
 
-        // Try LibreOffice in background if available, otherwise card-render immediately
         if SlideRenderer.isAvailable {
             let renders = await Task.detached {
                 (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
@@ -221,7 +379,6 @@ struct ScriptManagerView: View {
             }
             try? ctx.save()
         } else {
-            // No LibreOffice — render cards synchronously on main actor (fast)
             for slide in slides {
                 guard let section = sectionIndex[slide.slideNumber] else { continue }
                 if let cardData = SlideCardRenderer.render(slide: slide) {
@@ -233,76 +390,6 @@ struct ScriptManagerView: View {
                 }
             }
             try? ctx.save()
-        }
-    }
-
-    private func openAssistantWindow(data: AssistantData) {
-        let ctx = modelContext
-        // Escape the current CA commit transaction before creating a window.
-        Task { @MainActor in
-            await Task.yield()
-            AssistantWindowController.shared.show(
-                script: data.script,
-                slides: data.slides,
-                initialSnapshots: data.initialSnapshots,
-                modelContext: ctx
-            )
-        }
-    }
-}
-
-// MARK: - Assistant Window Controller
-
-/// Manages the Script Assistant window lifecycle outside of SwiftUI @State
-/// to avoid dangling pointer crashes on close.
-@MainActor
-final class AssistantWindowController: NSObject, NSWindowDelegate {
-    static let shared = AssistantWindowController()
-
-    /// Strong reference keeps the window alive; set to nil on close.
-    private var windowController: NSWindowController?
-
-    func show(script: Script, slides: [SlideContent], initialSnapshots: [SectionSnapshot], modelContext: ModelContext) {
-        // Close existing window cleanly
-        if let existing = windowController {
-            existing.window?.delegate = nil
-            existing.close()
-            windowController = nil
-        }
-
-        let contentView = ScriptAssistantView(
-            script: script,
-            slides: slides,
-            initialSnapshots: initialSnapshots
-        )
-        .environment(\.modelContext, modelContext)
-
-        let hostingView = NSHostingView(rootView: contentView)
-        hostingView.autoresizingMask = [.width, .height]
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 780),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Script Assistant"
-        window.isRestorable = false
-        window.contentView = hostingView
-        window.minSize = NSSize(width: 900, height: 600)
-        window.center()
-        window.delegate = self
-
-        let wc = NSWindowController(window: window)
-        windowController = wc
-        wc.showWindow(nil)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        // Let AppKit finish closing naturally — just release our strong reference
-        // on the next run loop turn so the window teardown completes first.
-        DispatchQueue.main.async { [weak self] in
-            self?.windowController = nil
         }
     }
 }

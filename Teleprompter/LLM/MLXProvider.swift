@@ -17,6 +17,8 @@ final class MLXProvider: LLMProvider, @unchecked Sendable {
 
     var supportsParallelGeneration: Bool { false }
 
+    var contextWindowSize: Int? { AppSettings.shared.mlxContextWindow }
+
     var isAvailable: Bool {
         get async {
             await MLXModelManager.shared.loadState == .loaded

@@ -1,9 +1,27 @@
 // Teleprompter/Views/ScriptManager/SlideSectionView.swift
 import SwiftUI
 
+/// Self-contained pulsing border that manages its own animation state.
+struct PulsingBorder: View {
+    @State private var opacity: Double = 0.3
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.accentColor, lineWidth: 2)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    opacity = 0.8
+                }
+            }
+    }
+}
+
 struct SlideSectionView: View {
     @Bindable var section: ScriptSection
     var fontSize: Double = 13
+    var isGenerating: Bool = false
+    var onGenerate: ((Int) -> Void)?
     @State private var isEditing = false
     @State private var contentBeforeEdit = ""
     @FocusState private var editorFocused: Bool
@@ -36,6 +54,12 @@ struct SlideSectionView: View {
 
                 Spacer()
 
+                if isGenerating {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                }
+
                 if isEditing {
                     Button("Done") {
                         commitEdit()
@@ -43,6 +67,19 @@ struct SlideSectionView: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
+                }
+
+                if let onGenerate, !isGenerating {
+                    let hasContent = !section.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    Button {
+                        onGenerate(section.slideNumber)
+                    } label: {
+                        Image(systemName: hasContent ? "arrow.counterclockwise" : "sparkles")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(hasContent ? "Regenerate with AI" : "Generate with AI")
                 }
 
                 Text(ReadTimeEstimator.formatDuration(
@@ -94,6 +131,11 @@ struct SlideSectionView: View {
                         isEditing = true
                         editorFocused = true
                     }
+            }
+        }
+        .overlay {
+            if isGenerating {
+                PulsingBorder()
             }
         }
     }
