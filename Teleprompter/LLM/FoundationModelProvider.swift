@@ -44,9 +44,16 @@ final class FoundationModelProvider: LLMProvider, @unchecked Sendable {
             Task {
                 do {
                     let stream = currentSession.streamResponse(to: userMessage)
+                    var lastLength = 0
                     for try await partial in stream {
-                        let text = String(describing: partial)
-                        continuation.yield(text)
+                        // partial.content is the cumulative text so far;
+                        // yield only the new characters since last chunk.
+                        let fullText = partial.content
+                        if fullText.count > lastLength {
+                            let newText = String(fullText.dropFirst(lastLength))
+                            continuation.yield(newText)
+                            lastLength = fullText.count
+                        }
                     }
                 } catch {
                     continuation.yield("\n\n[Error: \(error.localizedDescription)]")

@@ -53,7 +53,6 @@ struct SlideSectionView: View {
             }
 
             // Slide preview thumbnail
-            let _ = print("[SlideSectionView] Slide \(section.slideNumber) thumbnailRelativePath: \(section.thumbnailRelativePath ?? "nil")")
             if let path = section.thumbnailRelativePath, !path.isEmpty {
                 SlidePreviewThumbnail(relativePath: path, maxWidth: 240)
             }

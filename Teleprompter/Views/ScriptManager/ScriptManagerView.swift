@@ -223,25 +223,17 @@ struct ScriptManagerView: View {
             }
         } else {
             // No LibreOffice — render cards synchronously on main actor (fast)
-            print("[SlidePreview] Rendering \(slides.count) card previews for script '\(script.name)' (storageId: \(script.storageId))")
             for slide in slides {
-                guard let section = sectionIndex[slide.slideNumber] else {
-                    print("[SlidePreview] Slide \(slide.slideNumber): no matching section found")
-                    continue
-                }
+                guard let section = sectionIndex[slide.slideNumber] else { continue }
                 if let cardData = SlideCardRenderer.render(slide: slide) {
                     let paths = SlideImageStore.save(images: [cardData], scriptId: script.storageId, slideNumber: slide.slideNumber, type: .preview)
                     section.thumbnailRelativePath = paths.first
-                    print("[SlidePreview] Slide \(slide.slideNumber): saved thumbnail at \(paths.first ?? "nil")")
-                } else {
-                    print("[SlidePreview] Slide \(slide.slideNumber): SlideCardRenderer.render returned nil")
                 }
                 if !slide.images.isEmpty {
                     SlideImageStore.saveRaw(images: slide.images, scriptId: script.storageId, slideNumber: slide.slideNumber)
                 }
             }
             try? ctx.save()
-            print("[SlidePreview] Done. Saved model context.")
         }
     }
 

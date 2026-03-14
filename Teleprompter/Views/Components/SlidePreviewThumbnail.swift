@@ -27,10 +27,7 @@ struct SlidePreviewThumbnail: View {
         }
         .frame(maxWidth: maxWidth)
         .task(id: relativePath) {
-            print("[SlideThumb] Loading: \(relativePath)")
-            let loaded = await SlideImageStore.load(relativePath: relativePath)
-            print("[SlideThumb] Result for \(relativePath): \(loaded != nil ? "OK \(Int(loaded!.size.width))x\(Int(loaded!.size.height))" : "nil")")
-            image = loaded
+            image = await SlideImageStore.load(relativePath: relativePath)
         }
     }
 }
