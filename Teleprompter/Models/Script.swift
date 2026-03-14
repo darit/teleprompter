@@ -11,6 +11,8 @@ final class Script {
     var scrollSpeed: Double
     var fontSize: Double
     var targetDuration: Double?
+    /// Stable identifier for file-based storage (slide images, etc.)
+    var storageId: String = UUID().uuidString
 
     var sortedSections: [ScriptSection] {
         sections.sorted { $0.order < $1.order }
@@ -20,7 +22,7 @@ final class Script {
         name: String,
         sections: [ScriptSection] = [],
         chatHistory: [PersistedChatMessage] = [],
-        scrollSpeed: Double = 150.0,
+        scrollSpeed: Double = 160.0,
         fontSize: Double = 16.0,
         targetDuration: Double? = nil
     ) {

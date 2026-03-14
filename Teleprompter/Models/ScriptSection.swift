@@ -14,6 +14,8 @@ final class ScriptSection {
     var originalBodyText: String = ""
     /// Original speaker notes extracted from the PPTX file.
     var originalNotes: String = ""
+    /// Relative path to the slide preview image (content card or LibreOffice render).
+    var thumbnailRelativePath: String = ""
 
     init(
         slideNumber: Int,
@@ -33,6 +35,17 @@ final class ScriptSection {
         self.isAIRefined = isAIRefined
         self.originalBodyText = originalBodyText
         self.originalNotes = originalNotes
+    }
+
+    /// Value-type snapshot for UI display (breaks SwiftData observation chain).
+    func toSnapshot() -> SectionSnapshot {
+        SectionSnapshot(
+            slideNumber: slideNumber,
+            label: label,
+            content: content,
+            accentColorHex: accentColorHex,
+            thumbnailRelativePath: thumbnailRelativePath
+        )
     }
 
     /// Reconstruct a SlideContent from the persisted original PPTX data.

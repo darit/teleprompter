@@ -9,6 +9,12 @@ struct TeleprompterContentView: View {
             HStack(spacing: 8) {
                 if state.currentSectionIndex < state.sections.count {
                     let current = state.sections[state.currentSectionIndex]
+
+                    if AppSettings.shared.showSlideThumbnails,
+                       !current.thumbnailRelativePath.isEmpty {
+                        SlidePreviewThumbnail(relativePath: current.thumbnailRelativePath, maxWidth: 120)
+                    }
+
                     SlidePillView(slideNumber: current.slideNumber, colorHex: current.accentColorHex)
                     Text(current.label)
                         .font(.system(size: 11, weight: .medium))

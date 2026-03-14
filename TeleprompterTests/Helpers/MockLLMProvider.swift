@@ -4,7 +4,11 @@ import Foundation
 
 final class MockLLMProvider: LLMProvider, @unchecked Sendable {
     var displayName: String = "Mock Provider"
-    var isAvailable: Bool = true
+    var supportsParallelGeneration: Bool = true
+    var isAvailable: Bool {
+        get async { _isAvailable }
+    }
+    var _isAvailable: Bool = true
 
     var streamResponse: [String] = []
 

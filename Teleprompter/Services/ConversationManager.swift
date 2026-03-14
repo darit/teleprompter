@@ -24,20 +24,24 @@ final class ConversationManager {
     private let slides: [SlideContent]
     private let script: Script
     private let targetDurationMinutes: Int?
+    private let tone: SpeechTone
     private let modelContext: ModelContext
 
     init(provider: any LLMProvider, slides: [SlideContent], script: Script,
-         targetDurationMinutes: Int? = nil, modelContext: ModelContext) {
+         targetDurationMinutes: Int? = nil, tone: SpeechTone = .conversational,
+         modelContext: ModelContext) {
         self.provider = provider
         self.slides = slides
         self.script = script
         self.targetDurationMinutes = targetDurationMinutes
+        self.tone = tone
         self.modelContext = modelContext
 
         // Add system prompt with slide images for vision-capable models
         let systemPrompt = PromptTemplates.systemPrompt(
             slides: slides,
-            targetDurationMinutes: targetDurationMinutes
+            targetDurationMinutes: targetDurationMinutes,
+            tone: tone
         )
         let allSlideImages = slides.flatMap(\.images)
         messages.append(ChatMessage(role: .system, content: systemPrompt, images: allSlideImages))
@@ -167,7 +171,8 @@ final class ConversationManager {
 
         let systemPrompt = PromptTemplates.systemPrompt(
             slides: slides,
-            targetDurationMinutes: targetDurationMinutes
+            targetDurationMinutes: targetDurationMinutes,
+            tone: tone
         )
         let allImages = slides.flatMap(\.images)
 
@@ -175,7 +180,9 @@ final class ConversationManager {
         let slidesCopy = slides
 
         generateAllTask = Task {
-            let semaphore = AsyncSemaphore(limit: maxConcurrency)
+            // Local models must generate sequentially — GPU is shared
+            let effectiveConcurrency = providerRef.supportsParallelGeneration ? maxConcurrency : 1
+            let semaphore = AsyncSemaphore(limit: effectiveConcurrency)
 
             await withTaskGroup(of: (Int, String?).self) { group in
                 for slide in slidesCopy {
@@ -248,6 +255,8 @@ final class ConversationManager {
             messages.append(assistantMsg)
             persistMessage(assistantMsg)
 
+            ScriptBackupManager.backup(script: script)
+
             isGeneratingAll = false
             parallelGeneratingSlides = []
         }
@@ -312,6 +321,8 @@ final class ConversationManager {
                         updateScriptSection(slideNumber: slideNumber, content: segment.content, updateTimestamp: true)
                     }
                 }
+
+                ScriptBackupManager.backup(script: script)
 
                 currentStreamingText = ""
             } catch {

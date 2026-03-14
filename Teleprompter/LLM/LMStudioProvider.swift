@@ -26,27 +26,24 @@ final class LMStudioProvider: LLMProvider, @unchecked Sendable {
     }
 
     var isAvailable: Bool {
-        let semaphore = DispatchSemaphore(value: 0)
-        let url = baseURL.appendingPathComponent("/v1/models")
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = 2
+        get async {
+            let url = baseURL.appendingPathComponent("/v1/models")
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 2
 
-        var reachable = false
-        // Use a dedicated session to avoid interfering with the main session on app close
-        let checkConfig = URLSessionConfiguration.ephemeral
-        checkConfig.timeoutIntervalForRequest = 2
-        let checkSession = URLSession(configuration: checkConfig)
-        let task = checkSession.dataTask(with: request) { _, response, _ in
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                reachable = true
+            let checkConfig = URLSessionConfiguration.ephemeral
+            checkConfig.timeoutIntervalForRequest = 2
+            let checkSession = URLSession(configuration: checkConfig)
+            defer { checkSession.invalidateAndCancel() }
+
+            do {
+                let (_, response) = try await checkSession.data(for: request)
+                return (response as? HTTPURLResponse)?.statusCode == 200
+            } catch {
+                return false
             }
-            semaphore.signal()
         }
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 3)
-        checkSession.invalidateAndCancel()
-        return reachable
     }
 
     // MARK: - Streaming

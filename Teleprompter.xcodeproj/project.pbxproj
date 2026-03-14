@@ -29,6 +29,12 @@
 		18C82A992F6342FF00C2E6F9 /* TeleprompterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TeleprompterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXBuildFile section */
+		AA100001AA100001AA100001 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = AA200001AA200001AA200001 /* MLXLLM */; };
+		AA100002AA100002AA100002 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = AA200002AA200002AA200002 /* MLX */; };
+		AA100003AA100003AA100003 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = AA200003AA200003AA200003 /* MLXLMCommon */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		AA000001AA000001AA000001 /* Exceptions for "Teleprompter" folder in "Teleprompter" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -77,6 +83,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA100001AA100001AA100001 /* MLXLLM in Frameworks */,
+				AA100002AA100002AA100002 /* MLX in Frameworks */,
+				AA100003AA100003AA100003 /* MLXLMCommon in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +146,9 @@
 			);
 			name = Teleprompter;
 			packageProductDependencies = (
+				AA200001AA200001AA200001 /* MLXLLM */,
+				AA200002AA200002AA200002 /* MLX */,
+				AA200003AA200003AA200003 /* MLXLMCommon */,
 			);
 			productName = Teleprompter;
 			productReference = 18C82A802F6342FD00C2E6F9 /* Teleprompter.app */;
@@ -220,6 +232,9 @@
 			);
 			mainGroup = 18C82A772F6342FD00C2E6F9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA300001AA300001AA300001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 18C82A812F6342FD00C2E6F9 /* Products */;
 			projectDirPath = "";
@@ -644,6 +659,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA300001AA300001AA300001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = exactVersion;
+				version = 2.30.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA200001AA200001AA200001 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA300001AA300001AA300001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		AA200002AA200002AA200002 /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA300001AA300001AA300001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLX;
+		};
+		AA200003AA200003AA200003 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA300001AA300001AA300001 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 18C82A782F6342FD00C2E6F9 /* Project object */;
 }

@@ -8,6 +8,7 @@ struct SectionSnapshot: Identifiable, Equatable {
     let label: String
     let content: String
     let accentColorHex: String
+    var thumbnailRelativePath: String = ""
 }
 
 /// Self-contained pulsing border that manages its own animation state.
@@ -34,6 +35,7 @@ struct ScriptPreviewPanel: View {
     var isStreaming: Bool = false
     var parallelGeneratingSlides: Set<Int> = []
     var isGeneratingAll: Bool = false
+    @State private var showSlideImages: Bool = true
     var onGenerate: ((Int) -> Void)?
     var onGenerateAll: (() -> Void)?
     var onStopGenerateAll: (() -> Void)?
@@ -63,6 +65,10 @@ struct ScriptPreviewPanel: View {
                 }
 
                 Spacer()
+
+                Toggle("Slides", isOn: $showSlideImages)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
 
                 if isGeneratingAll {
                     Button {
@@ -130,6 +136,12 @@ struct ScriptPreviewPanel: View {
         let isParallelGenerating = parallelGeneratingSlides.contains(section.slideNumber)
 
         return VStack(alignment: .leading, spacing: 6) {
+            // Slide thumbnail
+            if showSlideImages && !section.thumbnailRelativePath.isEmpty {
+                SlidePreviewThumbnail(relativePath: section.thumbnailRelativePath, maxWidth: 200)
+                    .padding(.bottom, 4)
+            }
+
             HStack(spacing: 6) {
                 SlidePillView(slideNumber: section.slideNumber, colorHex: section.accentColorHex)
                 let hasContent = !section.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

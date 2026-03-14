@@ -2,7 +2,7 @@
 import Foundation
 
 enum ReadTimeEstimator {
-    static func estimateDuration(for text: String, wordsPerMinute: Double = 150) -> TimeInterval {
+    static func estimateDuration(for text: String, wordsPerMinute: Double = 160) -> TimeInterval {
         let wordCount = text.split(separator: " ").count
         guard wordCount > 0 else { return 0 }
         return (Double(wordCount) / wordsPerMinute) * 60.0

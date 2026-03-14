@@ -16,12 +16,17 @@ struct SettingsView: View {
                     Label("AI Assistant", systemImage: "sparkles")
                 }
 
+            ModelManagerView()
+                .tabItem {
+                    Label("Models", systemImage: "cpu")
+                }
+
             aboutTab
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 450, height: 400)
+        .frame(width: 500, height: 550)
     }
 
     // MARK: - Teleprompter Tab
@@ -71,6 +76,7 @@ struct SettingsView: View {
             Section("Display") {
                 Toggle("Show section time remaining", isOn: $settings.showSectionTimer)
                 Toggle("Show stage direction badges", isOn: $settings.showStageDirections)
+                Toggle("Show slide thumbnails in teleprompter", isOn: $settings.showSlideThumbnails)
                 Toggle("Always on top", isOn: $settings.alwaysOnTop)
             }
         }
@@ -90,6 +96,30 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 220)
                 }
+            }
+
+            Section("Presentation Style") {
+                HStack {
+                    Text("Default style")
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { SpeechTone(rawValue: settings.speechTone) ?? .conversational },
+                        set: { settings.speechTone = $0.rawValue }
+                    )) {
+                        let grouped = Dictionary(grouping: SpeechTone.allCases, by: \.category)
+                        ForEach(["Tone", "Presentation"], id: \.self) { category in
+                            Section(category) {
+                                ForEach(grouped[category] ?? []) { tone in
+                                    Text(tone.label).tag(tone)
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: 160)
+                }
+                Text((SpeechTone(rawValue: settings.speechTone) ?? .conversational).description)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
 
             Section("Parallel Generation") {

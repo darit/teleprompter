@@ -10,36 +10,35 @@ import SwiftData
 
 @main
 struct TeleprompterApp: App {
+    let modelContainer: ModelContainer
+
+    init() {
+        PersistenceManager.migrateOldStoreIfNeeded()
+
+        let config = ModelConfiguration(url: PersistenceManager.storeURL)
+        do {
+            modelContainer = try ModelContainer(
+                for: Script.self, ScriptSection.self, PersistedChatMessage.self,
+                configurations: config
+            )
+        } catch {
+            print("Failed to create persistent store: \(error). Falling back to in-memory.")
+            let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
+            modelContainer = try! ModelContainer(
+                for: Script.self, ScriptSection.self, PersistedChatMessage.self,
+                configurations: fallback
+            )
+        }
+    }
+
     var body: some Scene {
         Window("Teleprompter", id: "main") {
             ScriptManagerView()
         }
-        .modelContainer(for: [Script.self, ScriptSection.self, PersistedChatMessage.self])
-        .commands {
-            CommandGroup(after: .appSettings) {
-                Button("Settings...") {
-                    SettingsWindowController.shared.show()
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
-        }
+        .modelContainer(modelContainer)
 
         Settings {
             SettingsView()
         }
-    }
-}
-
-/// Manages a standalone settings window (fallback for programmatic opening).
-final class SettingsWindowController {
-    static let shared = SettingsWindowController()
-    private init() {}
-
-    func show() {
-        // Use the standard Settings scene activation
-        if #available(macOS 14.0, *) {
-            NSApp.activate()
-        }
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 }

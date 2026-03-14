@@ -84,8 +84,12 @@ struct ScriptManagerView: View {
             modelContext.insert(script)
             selectedScript = script
 
-            // Open assistant with slides
-            assistantData = AssistantData(script: script, slides: result.slides, initialSnapshots: [])
+            // Open assistant immediately (previews populate async)
+            let snapshots = script.sections.map { $0.toSnapshot() }
+            assistantData = AssistantData(script: script, slides: result.slides, initialSnapshots: snapshots)
+
+            // Generate slide previews in background
+            generateSlidePreviews(for: script, slides: result.slides, pptxURL: url)
 
             if !result.warnings.isEmpty {
                 importError = "Imported with warnings:\n" + result.warnings.joined(separator: "\n")
@@ -148,6 +152,9 @@ struct ScriptManagerView: View {
 
             script.modifiedAt = .now
 
+            // Re-render slide previews in background
+            generateSlidePreviews(for: script, slides: result.slides, pptxURL: url)
+
             if !result.warnings.isEmpty {
                 importError = "Updated with warnings:\n" + result.warnings.joined(separator: "\n")
                 showingImportError = true
@@ -160,32 +167,80 @@ struct ScriptManagerView: View {
 
     private func openAssistant(for script: Script) {
         let slides = script.sortedSections.map { $0.toSlideContent() }
-        let snapshots = script.sections.map { section in
-            SectionSnapshot(
-                slideNumber: section.slideNumber,
-                label: section.label,
-                content: section.content,
-                accentColorHex: section.accentColorHex
-            )
-        }
+        let snapshots = script.sections.map { $0.toSnapshot() }
         assistantData = AssistantData(script: script, slides: slides, initialSnapshots: snapshots)
     }
 
-    private func openAssistantWindow(data: AssistantData) {
-        // Defer ALL window manipulation to escape the SwiftUI render cycle.
-        // Modifying NSWindow contentView during body evaluation crashes when a
-        // TextEditor (_NSTextContentView) has focus — AppKit sends setContentView:
-        // to the focused text view instead of the window during a CA commit.
+    /// Generate and persist slide preview images, then save to model context.
+    /// Runs off the main actor for LibreOffice/disk I/O, returns to main for SwiftData + card rendering.
+    private func generateSlidePreviews(for script: Script, slides: [SlideContent], pptxURL: URL) {
         let ctx = modelContext
-        let existingWindow = assistantWindow
-        assistantWindow = nil
+        Task {
+            // LibreOffice rendering off main thread
+            let libreOfficeRenders = await Task.detached {
+                (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
+            }.value
 
-        DispatchQueue.main.async {
-            if let existing = existingWindow {
+            let renderIndex = Dictionary(libreOfficeRenders.map { ($0.slideNumber, $0.data) }, uniquingKeysWith: { a, _ in a })
+            let sectionIndex = Dictionary(script.sections.map { ($0.slideNumber, $0) }, uniquingKeysWith: { a, _ in a })
+
+            // Card rendering + disk I/O on main (ImageRenderer requires MainActor)
+            await MainActor.run {
+                for slide in slides {
+                    guard let section = sectionIndex[slide.slideNumber] else { continue }
+
+                    if let rendered = renderIndex[slide.slideNumber] {
+                        let paths = SlideImageStore.save(
+                            images: [rendered],
+                            scriptId: script.storageId,
+                            slideNumber: slide.slideNumber,
+                            type: .preview
+                        )
+                        section.thumbnailRelativePath = paths.first ?? ""
+                    } else if let cardData = SlideCardRenderer.render(slide: slide) {
+                        let paths = SlideImageStore.save(
+                            images: [cardData],
+                            scriptId: script.storageId,
+                            slideNumber: slide.slideNumber,
+                            type: .preview
+                        )
+                        section.thumbnailRelativePath = paths.first ?? ""
+                    }
+
+                    if !slide.images.isEmpty {
+                        SlideImageStore.saveRaw(
+                            images: slide.images,
+                            scriptId: script.storageId,
+                            slideNumber: slide.slideNumber
+                        )
+                    }
+                }
+
+                try? ctx.save()
+            }
+        }
+    }
+
+    private func openAssistantWindow(data: AssistantData) {
+        // Capture everything we need before escaping the SwiftUI render cycle.
+        // Any @State mutation during body evaluation / CA commit causes
+        // "Invalid attempt to open a new transaction during CA commit" crashes.
+        let ctx = modelContext
+
+        // Use Task to fully escape the current SwiftUI / CoreAnimation commit.
+        // DispatchQueue.main.async alone is not sufficient — it can still land
+        // inside the same CA transaction boundary.
+        Task { @MainActor in
+            // Tear down previous window if any
+            if let existing = assistantWindow {
                 existing.orderOut(nil)
                 existing.contentView = nil
                 existing.close()
+                assistantWindow = nil
             }
+
+            // Yield once more to let AppKit finish any pending cleanup
+            await Task.yield()
 
             let contentView = ScriptAssistantView(
                 script: data.script,
@@ -204,13 +259,41 @@ struct ScriptManagerView: View {
                 defer: false
             )
             window.title = "Script Assistant"
+            window.isRestorable = false
             window.contentView = hostingView
             window.minSize = NSSize(width: 900, height: 600)
             window.center()
-            window.makeKeyAndOrderFront(nil)
 
-            self.assistantWindow = window
+            // Clean up our reference when the user closes the window to prevent
+            // use-after-free on the hosting view's backing objects.
+            let delegate = AssistantWindowDelegate {}
+            window.delegate = delegate
+            // Keep the delegate alive as long as the window exists.
+            objc_setAssociatedObject(window, AssistantWindowDelegate.key, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+
+            window.makeKeyAndOrderFront(nil)
+            assistantWindow = window
         }
+    }
+}
+
+// MARK: - Assistant Window Delegate
+
+/// Releases the assistant window reference on close so the hosting view
+/// and its SwiftUI content are torn down cleanly before macOS attempts
+/// window restoration (which would otherwise crash with className=(null)).
+private final class AssistantWindowDelegate: NSObject, NSWindowDelegate {
+    static let key = UnsafeRawPointer(bitPattern: "AssistantWindowDelegate".hashValue)!
+    private let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        window.contentView = nil
+        onClose()
     }
 }
 

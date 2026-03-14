@@ -7,6 +7,7 @@ struct TeleprompterSection: Identifiable {
     let label: String
     let content: String
     let accentColorHex: String
+    var thumbnailRelativePath: String = ""
 }
 
 @Observable
@@ -127,11 +128,12 @@ final class TeleprompterState {
                 slideNumber: section.slideNumber,
                 label: section.label,
                 content: section.content,
-                accentColorHex: section.accentColorHex
+                accentColorHex: section.accentColorHex,
+                thumbnailRelativePath: section.thumbnailRelativePath
             )
         }
         // Migrate old multiplier format (0.25-3.0) to WPM (60-250)
-        let wpm = script.scrollSpeed < 10 ? 150.0 : script.scrollSpeed
+        let wpm = script.scrollSpeed < 10 ? 160.0 : script.scrollSpeed
         let state = TeleprompterState(
             sections: teleprompterSections,
             fontSize: script.fontSize,

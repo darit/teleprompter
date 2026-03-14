@@ -37,7 +37,9 @@ final class ClaudeCLIProvider: LLMProvider, @unchecked Sendable {
     }
 
     var isAvailable: Bool {
-        Self.resolvedClaudePath() != nil
+        get async {
+            Self.resolvedClaudePath() != nil
+        }
     }
 
     func stream(messages: [ChatMessage]) async throws -> AsyncStream<String> {

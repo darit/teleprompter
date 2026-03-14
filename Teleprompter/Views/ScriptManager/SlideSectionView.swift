@@ -5,6 +5,7 @@ struct SlideSectionView: View {
     @Bindable var section: ScriptSection
     var fontSize: Double = 13
     @State private var isEditing = false
+    @State private var contentBeforeEdit = ""
     @FocusState private var editorFocused: Bool
 
     /// Stage directions available for insertion
@@ -60,8 +61,10 @@ struct SlideSectionView: View {
                     .foregroundStyle(.secondary)
                     .lineSpacing(6)
                     .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
                     .padding(.leading, 4)
-                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: 120, idealHeight: max(120, estimatedEditorHeight), alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .focused($editorFocused)
                     .onChange(of: editorFocused) { _, focused in
                         if !focused {
@@ -82,6 +85,7 @@ struct SlideSectionView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        contentBeforeEdit = section.content
                         isEditing = true
                         editorFocused = true
                     }
@@ -174,9 +178,19 @@ struct SlideSectionView: View {
         }
     }
 
+    /// Rough height estimate so the editor expands to fit content without its own scrollbar.
+    private var estimatedEditorHeight: CGFloat {
+        let lineHeight = fontSize * 1.6 + 6  // font size × line-height + lineSpacing
+        let lines = max(5, section.content.components(separatedBy: .newlines).count + 2)
+        return CGFloat(lines) * lineHeight
+    }
+
     private func commitEdit() {
         isEditing = false
         editorFocused = false
+        if section.content != contentBeforeEdit {
+            NotificationCenter.default.post(name: .scriptSectionEdited, object: nil)
+        }
     }
 }
 

@@ -123,6 +123,9 @@ struct ScriptDetailView: View {
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .scriptSectionEdited)) { _ in
+            ScriptBackupManager.backup(script: script)
+        }
     }
 
     private var totalDuration: TimeInterval {
