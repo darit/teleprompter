@@ -55,6 +55,10 @@ struct TeleprompterTextView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        // Top spacer so content can scroll into the visible zone
+                        Spacer()
+                            .frame(height: 32)
+
                         ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
                             sectionView(section: section, index: index)
                                 .id("sectionBlock-\(index)")
@@ -65,6 +69,35 @@ struct TeleprompterTextView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
+                }
+                .mask {
+                    VStack(spacing: 0) {
+                        // Top fade — gentle so section headers stay readable
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 40)
+
+                        Color.white
+
+                        // Bottom fade — eased curve for natural falloff
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white, location: 0),
+                                .init(color: .white.opacity(0.6), location: 0.4),
+                                .init(color: .white.opacity(0.15), location: 0.75),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 100)
+                    }
                 }
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: state.currentSectionIndex) { _, newIndex in
