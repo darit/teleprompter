@@ -80,15 +80,11 @@ final class AppSettings {
 
     // MARK: - AI Assistant
 
-    /// Default LLM provider (auto-detected based on hardware if not set)
+    /// Default LLM provider
     var defaultProvider: String {
         get {
             if let saved = defaults.string(forKey: "defaultProvider") { return saved }
-            #if arch(arm64)
             return "Apple On-Device"
-            #else
-            return "LM Studio (Local)"
-            #endif
         }
         set { defaults.set(newValue, forKey: "defaultProvider") }
     }
