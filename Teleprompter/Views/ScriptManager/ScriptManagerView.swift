@@ -11,6 +11,7 @@ struct ScriptManagerView: View {
     @State private var selectedProvider: ProviderChoice = .foundationModel
     @State private var selectedTone: SpeechTone = .conversational
     @State private var targetMinutes: Int = 10
+    @State private var isLoadingProvider = false
     @State private var providerError: String?
     @State private var showingProviderError = false
     @State private var importError: String?
@@ -35,37 +36,50 @@ struct ScriptManagerView: View {
                         onUpdatePPTX: { updatePPTX(for: script) },
                         onPresent: { launchTeleprompter(for: script) },
                         onGenerateSlide: { slideNumber in
+                            if !showAssistant {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showAssistant = true
+                                }
+                            }
                             Task {
                                 if conversation == nil {
                                     await initializeConversation(for: script)
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showAssistant = true
-                                    }
                                 }
                                 await conversation?.generateSlide(slideNumber)
                             }
                         }
                     )
 
-                    if showAssistant, let conversation {
+                    if showAssistant {
                         Rectangle()
                             .fill(Color(nsColor: .separatorColor))
                             .frame(width: 1)
 
-                        AssistantPanelView(
-                            conversation: conversation,
-                            selectedProvider: $selectedProvider,
-                            selectedTone: $selectedTone,
-                            targetMinutes: $targetMinutes,
-                            onClose: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showAssistant = false
+                        if let conversation {
+                            AssistantPanelView(
+                                conversation: conversation,
+                                selectedProvider: $selectedProvider,
+                                selectedTone: $selectedTone,
+                                targetMinutes: $targetMinutes,
+                                onClose: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showAssistant = false
                                 }
                             },
                             onSwitchProvider: { switchProvider() }
                         )
                         .frame(width: 380)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
+                        } else {
+                            VStack {
+                                Spacer()
+                                ProgressView("Connecting to \(selectedProvider.rawValue)...")
+                                    .font(.system(size: 12))
+                                Spacer()
+                            }
+                            .frame(width: 380)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
                     }
                 }
             } else {
@@ -124,21 +138,21 @@ struct ScriptManagerView: View {
             targetMinutes = Int(saved)
         }
 
+        // Show the panel immediately, load provider in background
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showAssistant = true
+        }
+
         if conversation == nil {
             Task {
                 await initializeConversation(for: script)
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showAssistant = true
-                }
-            }
-        } else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showAssistant = true
             }
         }
     }
 
     private func initializeConversation(for script: Script) async {
+        isLoadingProvider = true
+        defer { isLoadingProvider = false }
         guard let provider = await makeProvider() else { return }
 
         script.targetDuration = Double(targetMinutes)

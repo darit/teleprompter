@@ -15,18 +15,10 @@ enum PromptTemplates {
         - Write for the ear, not the eye. Use contractions ("we're", "isn't", "you'll"). Use fragments when they land harder.
         - Vary sentence length: short punchy lines for impact, medium for flow, long (sparingly) for complexity.
         - Never start two consecutive sentences or paragraphs with the same word.
-        - NEVER open a slide with any of these words or phrases: "Alright", "So,", "Now,", "OK so", "OK,", "Let's dive in", "Moving on", "Let me", "Let's talk about", "Folks", "Hey everyone", "Well,". These are lazy filler openers. Every slide must earn its first sentence.
+        - NEVER open a slide with any of these words or phrases: "Alright", "So,", "Now,", "OK so", "OK,", "Let's dive in", "Moving on", "Let me", "Let's talk about", "Folks", "Hey everyone", "Well,". These are lazy filler openers.
         - NEVER use essay-style filler: "Furthermore", "Additionally", "In conclusion", "It's important to note", "It's worth mentioning", "As we all know".
-        - SLIDE OPENERS — each slide MUST open with one of these techniques (rotate, never repeat the same technique on consecutive slides):
-          1. A surprising statistic or number: "**73%** of teams that adopted this saw results in the first week."
-          2. A bold claim or contrarian statement: "Everything you've heard about scaling is wrong."
-          3. A short vivid anecdote (1-2 sentences): "Last Tuesday, one of our engineers shipped a fix at 2am -- and nobody asked her to."
-          4. A rhetorical question: "What would it mean if we could cut that timeline in half?"
-          5. A direct "imagine" scenario: "Picture this: it's Monday morning, your dashboard is green, and your inbox is empty."
-          6. A callback to a previous slide: "Remember that **73%** I mentioned? Here's where it comes from."
-          7. A quote or attribution: "As one of our customers put it: 'This changed everything.'"
-          8. A contrast or tension: "We spent three months building it. It took users three seconds to break it."
-        - Track which opener technique you used for the previous slide and pick a DIFFERENT one for the next slide.
+        - SLIDE OPENERS — vary how you start each slide. Good techniques: a rhetorical question, a direct statement about what's on the slide, a contrast or tension, a callback to an earlier slide, or simply jumping straight into the content. Don't repeat the same opener style on consecutive slides.
+        - NEVER HALLUCINATE: Do NOT invent statistics, percentages, quotes, anecdotes, or facts that are not in the slide content or speaker notes. Only use numbers and claims that appear in the source material. If the slide doesn't have data, don't make up data.
         - Use direct address ("you", "your", "we") and rhetorical questions to pull the audience in.
         - Bold key numbers and phrases for emphasis (e.g. **75% of employers**, **22 times more memorable**).
         - Use em dashes for natural pauses in speech -- like this -- rather than parentheses.
@@ -34,8 +26,7 @@ enum PromptTemplates {
         RHETORICAL TECHNIQUES (use naturally, don't force):
         - Tricolon (groups of three): "faster, smarter, cheaper"
         - Anaphora (repetition at start of clauses): "Every time we ship... Every time we measure..."
-        - Concrete numbers and statistics to anchor abstract claims
-        - Brief "imagine this" scenarios or anecdotes for emotional connection
+        - Use numbers and statistics FROM THE SLIDES to anchor claims -- never invent numbers
         - Rhetorical questions before revealing key points
 
         TRANSITIONS BETWEEN SLIDES:
@@ -104,9 +95,10 @@ enum PromptTemplates {
         Do NOT use stage directions on every slide. A presentation with 10 slides might have 4-6 stage directions total. The punctuation-based pacing already handles natural pauses -- you do not need [PAUSE] for normal emphasis. Reserve stage directions for truly impactful moments.
 
         SELF-CHECK (do this for EVERY slide before outputting):
-        1. Read the first sentence aloud. Does it start with "Alright", "So", "Now", "OK", "Folks", "Well", or "Let's"? If yes, REWRITE it using one of the 8 opener techniques above.
-        2. Compare this slide's opening to the previous slide's opening. Same technique or same first word? Change one.
-        3. Read the whole script aloud. If any line sounds written rather than spoken, rewrite it.
+        1. Read the first sentence aloud. Does it start with "Alright", "So", "Now", "OK", "Folks", "Well", or "Let's"? If yes, REWRITE it.
+        2. Compare this slide's opening to the previous slide's opening. Same first word? Change one.
+        3. Does the script contain any statistic, percentage, quote, or anecdote NOT found in the slide content? If yes, REMOVE it. Only use facts from the source material.
+        4. Read the whole script aloud. If any line sounds written rather than spoken, rewrite it.
 
         RESPONSE FORMAT (CRITICAL -- you MUST follow this exactly):
         Script text MUST be wrapped in markers like this:
