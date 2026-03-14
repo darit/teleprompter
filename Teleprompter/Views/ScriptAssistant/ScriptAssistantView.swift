@@ -137,13 +137,20 @@ struct ScriptAssistantView: View {
     }
 
     private var assistantToolbar: some View {
-        HStack(spacing: 16) {
-            Text("Script Assistant")
-                .font(.system(size: 13, weight: .semibold))
+        HStack(spacing: 14) {
+            // Title with subtle icon
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("Script Assistant")
+                    .font(.system(size: 13, weight: .semibold))
+            }
 
             Spacer()
 
-            HStack(spacing: 12) {
+            // Controls grouped in a glass capsule
+            HStack(spacing: 2) {
                 Picker("", selection: $selectedProvider) {
                     ForEach(ProviderChoice.allCases, id: \.self) { choice in
                         Text(choice.rawValue).tag(choice)
@@ -155,6 +162,8 @@ struct ScriptAssistantView: View {
                     AppSettings.shared.defaultProvider = selectedProvider.rawValue
                     switchProvider()
                 }
+
+                dividerDot
 
                 Picker("", selection: $selectedTone) {
                     let grouped = Dictionary(grouping: SpeechTone.allCases, by: \.category)
@@ -170,6 +179,8 @@ struct ScriptAssistantView: View {
                 .frame(width: 150)
                 .help("Presentation style")
 
+                dividerDot
+
                 Picker("", selection: $targetMinutes) {
                     Text("5 min").tag(5)
                     Text("10 min").tag(10)
@@ -184,15 +195,35 @@ struct ScriptAssistantView: View {
                     script.targetDuration = Double(targetMinutes)
                 }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    }
+            }
 
             Spacer()
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
                     conversation?.clearHistory()
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .background {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(.white.opacity(0.06), lineWidth: 1)
+                                }
+                        }
                 }
                 .buttonStyle(.plain)
                 .help("Clear chat history")
@@ -204,8 +235,25 @@ struct ScriptAssistantView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 8)
+        .background {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                // Subtle top highlight for depth
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(.white.opacity(0.04))
+                        .frame(height: 1)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var dividerDot: some View {
+        Circle()
+            .fill(.quaternary)
+            .frame(width: 3, height: 3)
     }
 
     private func refreshSnapshots() {

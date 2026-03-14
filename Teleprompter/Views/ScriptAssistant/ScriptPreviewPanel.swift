@@ -50,7 +50,7 @@ struct ScriptPreviewPanel: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Script Preview")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
 
                     if isGeneratingAll {
                         let done = totalSlides - parallelGeneratingSlides.count
@@ -99,8 +99,18 @@ struct ScriptPreviewPanel: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
+            .padding(.vertical, 8)
+            .background {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(.white.opacity(0.04))
+                            .frame(height: 1)
+                        Spacer()
+                    }
+                }
+            }
 
             Divider()
 
@@ -257,7 +267,17 @@ struct ScriptPreviewPanel: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .padding(.vertical, 8)
+        .background {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                VStack(spacing: 0) {
+                    Spacer()
+                    Rectangle()
+                        .fill(.white.opacity(0.04))
+                        .frame(height: 1)
+                }
+            }
+        }
     }
 }

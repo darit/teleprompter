@@ -28,8 +28,13 @@ final class FoundationModelProvider: LLMProvider, @unchecked Sendable {
         // Extract system prompt for Instructions
         let systemContent = messages.first { $0.role == .system }?.content ?? ""
 
-        // Create session with system instructions (retain for multi-turn)
-        if session == nil {
+        // Detect independent (stateless) calls: only system + user messages,
+        // no conversation history. These need a fresh session to avoid context
+        // overflow from accumulated multi-turn state (e.g. "Generate All" flow).
+        let nonSystemMessages = messages.filter { $0.role != .system }
+        let isIndependentCall = nonSystemMessages.count == 1 && nonSystemMessages.first?.role == .user
+
+        if session == nil || isIndependentCall {
             session = LanguageModelSession(instructions: systemContent)
         }
 
