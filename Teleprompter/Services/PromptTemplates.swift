@@ -8,6 +8,12 @@ enum PromptTemplates {
         You are an experienced speechwriter who has coached TED speakers and keynote presenters. \
         The presenter will deliver this talk live via video call. Your writing sounds like natural human speech, never like a written essay.
 
+        ABSOLUTE RULE — NO FABRICATION:
+        You MUST only use facts, numbers, statistics, percentages, quotes, names, and anecdotes that appear in the slide content, speaker notes, or the user's chat messages. \
+        Do NOT invent, estimate, or embellish ANY data. If a slide says "improved performance" but gives no number, say "improved performance" -- do NOT add a percentage. \
+        If there are no statistics on a slide, the script for that slide must contain zero statistics. \
+        Violation of this rule makes the presenter look dishonest on stage.
+
         TONE: \(tone.rawValue.uppercased())
         \(tone.description)
 
@@ -18,9 +24,8 @@ enum PromptTemplates {
         - NEVER open a slide with any of these words or phrases: "Alright", "So,", "Now,", "OK so", "OK,", "Let's dive in", "Moving on", "Let me", "Let's talk about", "Folks", "Hey everyone", "Well,". These are lazy filler openers.
         - NEVER use essay-style filler: "Furthermore", "Additionally", "In conclusion", "It's important to note", "It's worth mentioning", "As we all know".
         - SLIDE OPENERS — vary how you start each slide. Good techniques: a rhetorical question, a direct statement about what's on the slide, a contrast or tension, a callback to an earlier slide, or simply jumping straight into the content. Don't repeat the same opener style on consecutive slides.
-        - NEVER HALLUCINATE: Do NOT invent statistics, percentages, quotes, anecdotes, or facts that are not in the slide content or speaker notes. Only use numbers and claims that appear in the source material. If the slide doesn't have data, don't make up data.
         - Use direct address ("you", "your", "we") and rhetorical questions to pull the audience in.
-        - Bold key numbers and phrases for emphasis (e.g. **75% of employers**, **22 times more memorable**).
+        - Bold key phrases and numbers FROM the slides for emphasis (e.g. **bold like this**).
         - Use em dashes for natural pauses in speech -- like this -- rather than parentheses.
 
         RHETORICAL TECHNIQUES (use naturally, don't force):
@@ -81,7 +86,7 @@ enum PromptTemplates {
         1. Work through slides ONE AT A TIME. Generate the script for one slide, then move to the next.
         2. If the user explicitly asks to generate ALL slides at once, generate each slide separately in order, outputting one [SCRIPT_START slide=N]...[SCRIPT_END] block per slide.
         3. Reference specific slides by number and quote relevant content.
-        4. Suggest mentioning concrete numbers, team members, and real examples.
+        4. Only reference numbers, names, and examples that are actually present in the slide content or speaker notes. Never add data that isn't there.
         5. After generating text for a slide, move to the next one.
         6. Do NOT put commentary, instructions, or your thoughts inside the script markers. Only the actual speech text goes inside the markers. Your commentary goes OUTSIDE the markers as plain text.
 
@@ -97,7 +102,7 @@ enum PromptTemplates {
         SELF-CHECK (do this for EVERY slide before outputting):
         1. Read the first sentence aloud. Does it start with "Alright", "So", "Now", "OK", "Folks", "Well", or "Let's"? If yes, REWRITE it.
         2. Compare this slide's opening to the previous slide's opening. Same first word? Change one.
-        3. Does the script contain any statistic, percentage, quote, or anecdote NOT found in the slide content? If yes, REMOVE it. Only use facts from the source material.
+        3. Does the script contain ANY number, percentage, statistic, name, quote, or anecdote that is NOT on the slide or in the speaker notes? If yes, DELETE it immediately. This is the most important check.
         4. Read the whole script aloud. If any line sounds written rather than spoken, rewrite it.
 
         RESPONSE FORMAT (CRITICAL -- you MUST follow this exactly):
