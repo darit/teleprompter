@@ -57,6 +57,10 @@ final class MLXModelManager {
 
     init() {
         setupMemoryPressureObserver()
+        // Eagerly restore selected model so it's available before Settings is opened.
+        Task { @MainActor in
+            scanForModels()
+        }
     }
 
     deinit {

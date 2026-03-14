@@ -8,16 +8,37 @@ enum SlideCardRenderer {
     @MainActor
     static func render(slide: SlideContent) -> Data? {
         let cardView = SlideCardView(slide: slide)
-        let renderer = ImageRenderer(content: cardView)
-        renderer.scale = 2.0  // Retina
+        let size = NSSize(width: 480, height: 270)
 
-        guard let nsImage = renderer.nsImage,
-              let tiffData = nsImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
-        else { return nil }
+        // Host in a temporary offscreen window so the view gets a proper
+        // graphics context and layout pass. Plain NSHostingView without a
+        // window can fail to render.
+        let hostingView = NSHostingView(rootView: cardView)
+        hostingView.frame = NSRect(origin: .zero, size: size)
 
-        return jpegData
+        let offscreenWindow = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        offscreenWindow.contentView = hostingView
+        offscreenWindow.orderBack(nil)
+        offscreenWindow.setIsVisible(false)
+
+        // Force full layout
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.display()
+
+        guard let bitmap = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
+            offscreenWindow.contentView = nil
+            return nil
+        }
+        hostingView.cacheDisplay(in: hostingView.bounds, to: bitmap)
+
+        offscreenWindow.contentView = nil
+
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
     }
 
     /// Render content cards for all slides.

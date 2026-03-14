@@ -84,6 +84,7 @@ struct ScriptSidebarView: View {
         }
         SlideImageStore.delete(scriptId: script.storageId)
         modelContext.delete(script)
+        try? modelContext.save()
     }
 
     private func restoreFromBackup() {

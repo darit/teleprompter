@@ -24,10 +24,14 @@ struct TeleprompterApp: App {
         } catch {
             print("Failed to create persistent store: \(error). Falling back to in-memory.")
             let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
-            modelContainer = try! ModelContainer(
-                for: Script.self, ScriptSection.self, PersistedChatMessage.self,
-                configurations: fallback
-            )
+            do {
+                modelContainer = try ModelContainer(
+                    for: Script.self, ScriptSection.self, PersistedChatMessage.self,
+                    configurations: fallback
+                )
+            } catch {
+                fatalError("Failed to create even in-memory ModelContainer: \(error)")
+            }
         }
     }
 

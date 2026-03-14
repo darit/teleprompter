@@ -400,7 +400,7 @@ final class ConversationManager {
                     segments.append(ResponseSegment(type: .text, content: before))
                 }
 
-                let slideNumber = Int(match.1)!
+                guard let slideNumber = Int(match.1) else { continue }
                 let afterStart = String(remaining[match.range.upperBound...])
 
                 if let endRange = afterStart.range(of: endMarker) {

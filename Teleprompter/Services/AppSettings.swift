@@ -8,7 +8,7 @@ import SwiftUI
 final class AppSettings {
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults(suiteName: "com.dannyrodriguez.Teleprompter.settings")!
+    private let defaults = UserDefaults(suiteName: "com.dannyrodriguez.Teleprompter.settings") ?? .standard
 
     init() {
         migrateFromStandardIfNeeded()

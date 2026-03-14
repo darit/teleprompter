@@ -129,7 +129,7 @@ final class TeleprompterState {
                 label: section.label,
                 content: section.content,
                 accentColorHex: section.accentColorHex,
-                thumbnailRelativePath: section.thumbnailRelativePath
+                thumbnailRelativePath: section.thumbnailRelativePath ?? ""
             )
         }
         // Migrate old multiplier format (0.25-3.0) to WPM (60-250)

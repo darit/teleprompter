@@ -9,7 +9,6 @@ struct ScriptManagerView: View {
     @State private var assistantData: AssistantData?
     @State private var importError: String?
     @State private var showingImportError = false
-    @State private var assistantWindow: NSWindow?
     @Environment(\.modelContext) private var modelContext
 
     struct AssistantData: Identifiable {
@@ -55,6 +54,12 @@ struct ScriptManagerView: View {
     }
 
     private func importPPTX() {
+        // Defer to escape the current CA commit transaction — NSOpenPanel.runModal()
+        // opens a new transaction which crashes if called mid-commit.
+        DispatchQueue.main.async { self.performImportPPTX() }
+    }
+
+    private func performImportPPTX() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.init(filenameExtension: "pptx")!]
         panel.allowsMultipleSelection = false
@@ -82,14 +87,21 @@ struct ScriptManagerView: View {
             }
 
             modelContext.insert(script)
+            try? modelContext.save()
             selectedScript = script
 
-            // Open assistant immediately (previews populate async)
-            let snapshots = script.sections.map { $0.toSnapshot() }
-            assistantData = AssistantData(script: script, slides: result.slides, initialSnapshots: snapshots)
+            // Defer assistant + preview work to escape the current CA commit.
+            let slides = result.slides
+            let pptxURL = url
+            Task { @MainActor in
+                // Yield to let SwiftUI / CA finish the current transaction
+                await Task.yield()
 
-            // Generate slide previews in background
-            generateSlidePreviews(for: script, slides: result.slides, pptxURL: url)
+                let snapshots = script.sections.map { $0.toSnapshot() }
+                assistantData = AssistantData(script: script, slides: slides, initialSnapshots: snapshots)
+
+                generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
+            }
 
             if !result.warnings.isEmpty {
                 importError = "Imported with warnings:\n" + result.warnings.joined(separator: "\n")
@@ -109,6 +121,11 @@ struct ScriptManagerView: View {
     }
 
     private func updatePPTX(for script: Script) {
+        // Defer to escape the current CA commit transaction
+        DispatchQueue.main.async { self.performUpdatePPTX(for: script) }
+    }
+
+    private func performUpdatePPTX(for script: Script) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.init(filenameExtension: "pptx")!]
         panel.allowsMultipleSelection = false
@@ -151,9 +168,15 @@ struct ScriptManagerView: View {
             }
 
             script.modifiedAt = .now
+            try? modelContext.save()
 
-            // Re-render slide previews in background
-            generateSlidePreviews(for: script, slides: result.slides, pptxURL: url)
+            // Defer preview work to escape the current CA commit
+            let slides = result.slides
+            let pptxURL = url
+            Task { @MainActor in
+                await Task.yield()
+                generateSlidePreviews(for: script, slides: slides, pptxURL: pptxURL)
+            }
 
             if !result.warnings.isEmpty {
                 importError = "Updated with warnings:\n" + result.warnings.joined(separator: "\n")
@@ -172,128 +195,124 @@ struct ScriptManagerView: View {
     }
 
     /// Generate and persist slide preview images, then save to model context.
-    /// Runs off the main actor for LibreOffice/disk I/O, returns to main for SwiftData + card rendering.
+    @MainActor
     private func generateSlidePreviews(for script: Script, slides: [SlideContent], pptxURL: URL) {
         let ctx = modelContext
-        Task {
-            // LibreOffice rendering off main thread
-            let libreOfficeRenders = await Task.detached {
-                (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
-            }.value
+        let sectionIndex = Dictionary(script.sections.map { ($0.slideNumber, $0) }, uniquingKeysWith: { a, _ in a })
 
-            let renderIndex = Dictionary(libreOfficeRenders.map { ($0.slideNumber, $0.data) }, uniquingKeysWith: { a, _ in a })
-            let sectionIndex = Dictionary(script.sections.map { ($0.slideNumber, $0) }, uniquingKeysWith: { a, _ in a })
+        // Try LibreOffice in background if available, otherwise card-render immediately
+        if SlideRenderer.isAvailable {
+            Task {
+                let renders = await Task.detached {
+                    (try? await SlideRenderer.renderSlides(pptxURL: pptxURL)) ?? []
+                }.value
+                let renderIndex = Dictionary(renders.map { ($0.slideNumber, $0.data) }, uniquingKeysWith: { a, _ in a })
 
-            // Card rendering + disk I/O on main (ImageRenderer requires MainActor)
-            await MainActor.run {
                 for slide in slides {
                     guard let section = sectionIndex[slide.slideNumber] else { continue }
-
-                    if let rendered = renderIndex[slide.slideNumber] {
-                        let paths = SlideImageStore.save(
-                            images: [rendered],
-                            scriptId: script.storageId,
-                            slideNumber: slide.slideNumber,
-                            type: .preview
-                        )
-                        section.thumbnailRelativePath = paths.first ?? ""
-                    } else if let cardData = SlideCardRenderer.render(slide: slide) {
-                        let paths = SlideImageStore.save(
-                            images: [cardData],
-                            scriptId: script.storageId,
-                            slideNumber: slide.slideNumber,
-                            type: .preview
-                        )
-                        section.thumbnailRelativePath = paths.first ?? ""
+                    let imageData = renderIndex[slide.slideNumber] ?? SlideCardRenderer.render(slide: slide)
+                    if let imageData {
+                        let paths = SlideImageStore.save(images: [imageData], scriptId: script.storageId, slideNumber: slide.slideNumber, type: .preview)
+                        section.thumbnailRelativePath = paths.first
                     }
-
                     if !slide.images.isEmpty {
-                        SlideImageStore.saveRaw(
-                            images: slide.images,
-                            scriptId: script.storageId,
-                            slideNumber: slide.slideNumber
-                        )
+                        SlideImageStore.saveRaw(images: slide.images, scriptId: script.storageId, slideNumber: slide.slideNumber)
                     }
                 }
-
                 try? ctx.save()
             }
+        } else {
+            // No LibreOffice — render cards synchronously on main actor (fast)
+            print("[SlidePreview] Rendering \(slides.count) card previews for script '\(script.name)' (storageId: \(script.storageId))")
+            for slide in slides {
+                guard let section = sectionIndex[slide.slideNumber] else {
+                    print("[SlidePreview] Slide \(slide.slideNumber): no matching section found")
+                    continue
+                }
+                if let cardData = SlideCardRenderer.render(slide: slide) {
+                    let paths = SlideImageStore.save(images: [cardData], scriptId: script.storageId, slideNumber: slide.slideNumber, type: .preview)
+                    section.thumbnailRelativePath = paths.first
+                    print("[SlidePreview] Slide \(slide.slideNumber): saved thumbnail at \(paths.first ?? "nil")")
+                } else {
+                    print("[SlidePreview] Slide \(slide.slideNumber): SlideCardRenderer.render returned nil")
+                }
+                if !slide.images.isEmpty {
+                    SlideImageStore.saveRaw(images: slide.images, scriptId: script.storageId, slideNumber: slide.slideNumber)
+                }
+            }
+            try? ctx.save()
+            print("[SlidePreview] Done. Saved model context.")
         }
     }
 
     private func openAssistantWindow(data: AssistantData) {
-        // Capture everything we need before escaping the SwiftUI render cycle.
-        // Any @State mutation during body evaluation / CA commit causes
-        // "Invalid attempt to open a new transaction during CA commit" crashes.
         let ctx = modelContext
-
-        // Use Task to fully escape the current SwiftUI / CoreAnimation commit.
-        // DispatchQueue.main.async alone is not sufficient — it can still land
-        // inside the same CA transaction boundary.
+        // Escape the current CA commit transaction before creating a window.
         Task { @MainActor in
-            // Tear down previous window if any
-            if let existing = assistantWindow {
-                existing.orderOut(nil)
-                existing.contentView = nil
-                existing.close()
-                assistantWindow = nil
-            }
-
-            // Yield once more to let AppKit finish any pending cleanup
             await Task.yield()
-
-            let contentView = ScriptAssistantView(
+            AssistantWindowController.shared.show(
                 script: data.script,
                 slides: data.slides,
-                initialSnapshots: data.initialSnapshots
+                initialSnapshots: data.initialSnapshots,
+                modelContext: ctx
             )
-            .environment(\.modelContext, ctx)
-
-            let hostingView = NSHostingView(rootView: contentView)
-            hostingView.autoresizingMask = [.width, .height]
-
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1200, height: 780),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "Script Assistant"
-            window.isRestorable = false
-            window.contentView = hostingView
-            window.minSize = NSSize(width: 900, height: 600)
-            window.center()
-
-            // Clean up our reference when the user closes the window to prevent
-            // use-after-free on the hosting view's backing objects.
-            let delegate = AssistantWindowDelegate {}
-            window.delegate = delegate
-            // Keep the delegate alive as long as the window exists.
-            objc_setAssociatedObject(window, AssistantWindowDelegate.key, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-
-            window.makeKeyAndOrderFront(nil)
-            assistantWindow = window
         }
     }
 }
 
-// MARK: - Assistant Window Delegate
+// MARK: - Assistant Window Controller
 
-/// Releases the assistant window reference on close so the hosting view
-/// and its SwiftUI content are torn down cleanly before macOS attempts
-/// window restoration (which would otherwise crash with className=(null)).
-private final class AssistantWindowDelegate: NSObject, NSWindowDelegate {
-    static let key = UnsafeRawPointer(bitPattern: "AssistantWindowDelegate".hashValue)!
-    private let onClose: () -> Void
+/// Manages the Script Assistant window lifecycle outside of SwiftUI @State
+/// to avoid dangling pointer crashes on close.
+@MainActor
+final class AssistantWindowController: NSObject, NSWindowDelegate {
+    static let shared = AssistantWindowController()
 
-    init(onClose: @escaping () -> Void) {
-        self.onClose = onClose
+    /// Strong reference keeps the window alive; set to nil on close.
+    private var windowController: NSWindowController?
+
+    func show(script: Script, slides: [SlideContent], initialSnapshots: [SectionSnapshot], modelContext: ModelContext) {
+        // Close existing window cleanly
+        if let existing = windowController {
+            existing.window?.delegate = nil
+            existing.close()
+            windowController = nil
+        }
+
+        let contentView = ScriptAssistantView(
+            script: script,
+            slides: slides,
+            initialSnapshots: initialSnapshots
+        )
+        .environment(\.modelContext, modelContext)
+
+        let hostingView = NSHostingView(rootView: contentView)
+        hostingView.autoresizingMask = [.width, .height]
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 780),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Script Assistant"
+        window.isRestorable = false
+        window.contentView = hostingView
+        window.minSize = NSSize(width: 900, height: 600)
+        window.center()
+        window.delegate = self
+
+        let wc = NSWindowController(window: window)
+        windowController = wc
+        wc.showWindow(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        window.contentView = nil
-        onClose()
+        // Let AppKit finish closing naturally — just release our strong reference
+        // on the next run loop turn so the window teardown completes first.
+        DispatchQueue.main.async { [weak self] in
+            self?.windowController = nil
+        }
     }
 }
 

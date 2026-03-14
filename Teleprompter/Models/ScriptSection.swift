@@ -15,7 +15,7 @@ final class ScriptSection {
     /// Original speaker notes extracted from the PPTX file.
     var originalNotes: String = ""
     /// Relative path to the slide preview image (content card or LibreOffice render).
-    var thumbnailRelativePath: String = ""
+    var thumbnailRelativePath: String?
 
     init(
         slideNumber: Int,
@@ -44,7 +44,7 @@ final class ScriptSection {
             label: label,
             content: content,
             accentColorHex: accentColorHex,
-            thumbnailRelativePath: thumbnailRelativePath
+            thumbnailRelativePath: thumbnailRelativePath ?? ""
         )
     }
 

@@ -2,6 +2,7 @@
 import Foundation
 import FoundationModels
 
+@MainActor
 final class FoundationModelProvider: LLMProvider, @unchecked Sendable {
 
     var displayName: String { "Apple On-Device (Built-in)" }
@@ -35,7 +36,9 @@ final class FoundationModelProvider: LLMProvider, @unchecked Sendable {
         // Build the user message (last user message in the conversation)
         let userMessage = messages.last { $0.role == .user }?.content ?? ""
 
-        let currentSession = session!
+        guard let currentSession = session else {
+            return AsyncStream { $0.finish() }
+        }
 
         return AsyncStream { continuation in
             Task {

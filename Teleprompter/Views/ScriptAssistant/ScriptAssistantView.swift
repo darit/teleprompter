@@ -17,10 +17,11 @@ struct ScriptAssistantView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var conversation: ConversationManager?
     @State private var targetMinutes: Int = 10
-    @State private var selectedProvider: ProviderChoice = .lmStudio
+    @State private var selectedProvider: ProviderChoice = .mlxLocal
     @State private var selectedTone: SpeechTone = .conversational
     @State private var providerError: String?
     @State private var showingProviderError = false
+    @State private var providerReady = false
     @State private var sectionSnapshots: [SectionSnapshot] = []
     @State private var isConversationStreaming = false
     @State private var activeSlide: Int?
@@ -40,8 +41,16 @@ struct ScriptAssistantView: View {
                 if let conversation {
                     ChatPanelView(conversation: conversation)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if providerReady {
+                    // Provider failed to initialize — show message instead of infinite spinner
+                    ContentUnavailableView(
+                        "No AI Provider",
+                        systemImage: "cpu",
+                        description: Text("Select a provider from the toolbar above.\nFor local AI, configure a model in Settings → Models.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ProgressView()
+                    ProgressView("Connecting to \(selectedProvider.rawValue)…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
@@ -111,8 +120,13 @@ struct ScriptAssistantView: View {
             if let savedTone = SpeechTone(rawValue: AppSettings.shared.speechTone) {
                 selectedTone = savedTone
             }
+            // Restore saved provider choice
+            if let saved = ProviderChoice(rawValue: AppSettings.shared.defaultProvider) {
+                selectedProvider = saved
+            }
             sectionSnapshots = initialSnapshots
             await initializeConversation()
+            providerReady = true
             conversation?.onSectionsChanged = { [self] in
                 refreshSnapshots()
             }
@@ -138,6 +152,7 @@ struct ScriptAssistantView: View {
                 .pickerStyle(.menu)
                 .frame(width: 190)
                 .onChange(of: selectedProvider) {
+                    AppSettings.shared.defaultProvider = selectedProvider.rawValue
                     switchProvider()
                 }
 
@@ -233,8 +248,20 @@ struct ScriptAssistantView: View {
             return fm
         case .mlxLocal:
             let manager = MLXModelManager.shared
+            // If no model is selected yet, the background scan may not have
+            // finished.  Wait briefly for it to complete.
+            if await manager.selectedModel == nil {
+                let savedId = AppSettings.shared.mlxSelectedModelId
+                if !savedId.isEmpty {
+                    // Scan may already be in flight from init; give it time to land.
+                    for _ in 0..<10 {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        if await manager.selectedModel != nil { break }
+                    }
+                }
+            }
             guard let modelInfo = await manager.selectedModel else {
-                providerError = "No local model selected. Open Settings > Models to download one."
+                providerError = "No local model selected. Open Settings → Models to download one."
                 showingProviderError = true
                 return nil
             }

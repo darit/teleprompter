@@ -141,6 +141,6 @@ extension MLXModelInfo {
     static var bestForThisMachine: MLXModelInfo {
         let ram = ProcessInfo.processInfo.physicalMemory
         let suitable = recommended.filter { $0.minimumRAM <= ram }
-        return suitable.last ?? recommended.first!
+        return suitable.last ?? recommended[0]
     }
 }
