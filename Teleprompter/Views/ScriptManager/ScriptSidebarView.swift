@@ -54,16 +54,6 @@ struct ScriptSidebarView: View {
             }
             .searchable(text: $searchText, prompt: "Search scripts...")
 
-            // Model status at bottom (model name wired in Plan 2)
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(.green)
-                    .frame(width: 5, height: 5)
-                Text("No model configured")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(10)
         }
         .alert("Restore Error", isPresented: $showingRestoreError) {
             Button("OK") {}
