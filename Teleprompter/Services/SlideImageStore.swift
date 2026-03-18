@@ -1,6 +1,7 @@
 // Teleprompter/Services/SlideImageStore.swift
 import Foundation
 import AppKit
+import os.log
 
 enum SlideImageStore {
     enum ImageType: String {
@@ -30,7 +31,8 @@ enum SlideImageStore {
                     try thumbnail.write(to: fileURL, options: .atomic)
                     paths.append("\(scriptId)/\(type.rawValue)/\(filename)")
                 } catch {
-                    print("SlideImageStore: failed to write \(filename): \(error)")
+                    Logger(subsystem: "com.darit.Teleprompter", category: "SlideImageStore")
+                        .error("Failed to write \(filename): \(error.localizedDescription)")
                 }
             }
         }

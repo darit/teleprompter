@@ -4,12 +4,12 @@ import SwiftData
 
 enum PersistenceManager {
     /// Stable database location that survives Xcode rebuilds.
-    /// ~/Library/Application Support/com.dannyrodriguez.Teleprompter/
+    /// ~/Library/Application Support/com.darit.Teleprompter/
     static let appSupportDirectory: URL = {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             fatalError("Application Support directory not found")
         }
-        let appDir = appSupport.appendingPathComponent("com.dannyrodriguez.Teleprompter", isDirectory: true)
+        let appDir = appSupport.appendingPathComponent("com.darit.Teleprompter", isDirectory: true)
         try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
         return appDir
     }()

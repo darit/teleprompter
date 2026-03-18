@@ -1,6 +1,7 @@
 // Teleprompter/Services/ScriptBackupManager.swift
 import Foundation
 import CryptoKit
+import os.log
 
 enum ScriptBackupManager {
     static let backupDirectory: URL = {
@@ -10,7 +11,7 @@ enum ScriptBackupManager {
         return backupDir
     }()
 
-    private static let backupQueue = DispatchQueue(label: "com.dannyrodriguez.Teleprompter.backup", qos: .utility)
+    private static let backupQueue = DispatchQueue(label: "com.darit.Teleprompter.backup", qos: .utility)
 
     /// Export a script and all its sections + chat history to a JSON file.
     /// Runs on a background queue to avoid blocking the main thread.
@@ -52,7 +53,8 @@ enum ScriptBackupManager {
                 let data = try encoder.encode(payload)
                 try data.write(to: fileURL, options: .atomic)
             } catch {
-                print("Backup failed for '\(payload.name)': \(error)")
+                Logger(subsystem: "com.darit.Teleprompter", category: "ScriptBackupManager")
+                    .error("Backup failed for '\(payload.name)': \(error.localizedDescription)")
             }
         }
     }
