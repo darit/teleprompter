@@ -4,3 +4,11 @@
 Teleprompter/CLAUDE.md
 Teleprompter/**/CLAUDE.md
 TeleprompterTests/**/CLAUDE.md
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# Build artifacts
+.build/
+DerivedData/
