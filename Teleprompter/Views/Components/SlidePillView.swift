@@ -20,7 +20,7 @@ struct SlidePillView: View {
                             .stroke(Color(hex: colorHex)?.opacity(0.2) ?? Color.gray.opacity(0.2), lineWidth: 1)
                     }
             }
-        // TODO: Add .glassEffect(.regular.interactive, in: .capsule) when targeting macOS Tahoe
+
     }
 }
 

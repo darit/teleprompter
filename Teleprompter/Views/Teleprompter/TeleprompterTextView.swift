@@ -170,7 +170,7 @@ struct TeleprompterTextView: View {
                 .tracking(2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.ultraThinMaterial.opacity(0.85))
+        .glassEffect(.regular.interactive(), in: .rect)
     }
 
     private func beginPlayWithCountdown() {

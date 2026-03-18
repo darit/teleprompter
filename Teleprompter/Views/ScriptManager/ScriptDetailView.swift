@@ -129,7 +129,7 @@ struct ScriptDetailView: View {
             .foregroundStyle(.tertiary)
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .background(.bar)
         }
         .onReceive(NotificationCenter.default.publisher(for: .scriptSectionEdited)) { _ in
             ScriptBackupManager.backup(script: script)

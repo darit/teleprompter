@@ -96,10 +96,7 @@ struct ChatMessageView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-        }
+        .glassEffect(.regular.interactive(), in: .capsule)
         .padding(8)
     }
 

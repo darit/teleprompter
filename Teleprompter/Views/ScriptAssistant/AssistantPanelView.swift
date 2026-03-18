@@ -64,7 +64,7 @@ struct AssistantPanelView: View {
                 .help("Close assistant")
             }
 
-            // Controls row
+            // Controls row — no glass here, it's inside the header glass already
             HStack(spacing: 2) {
                 Picker("", selection: $selectedProvider) {
                     ForEach(ProviderChoice.allCases, id: \.self) { choice in
@@ -111,11 +111,7 @@ struct AssistantPanelView: View {
             .padding(.vertical, 3)
             .background {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-                    }
+                    .fill(.white.opacity(0.05))
             }
 
             // Generation progress
@@ -134,17 +130,8 @@ struct AssistantPanelView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(.white.opacity(0.04))
-                        .frame(height: 1)
-                    Spacer()
-                }
-            }
-        }
+        .background(.bar)
+        .zIndex(1)
     }
 
     private var generateButton: some View {
@@ -220,7 +207,7 @@ struct AssistantPanelView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
+            .background(.bar)
         }
     }
 

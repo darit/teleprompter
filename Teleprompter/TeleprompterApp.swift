@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import os.log
 
 @main
 struct TeleprompterApp: App {
@@ -22,7 +23,8 @@ struct TeleprompterApp: App {
                 configurations: config
             )
         } catch {
-            print("Failed to create persistent store: \(error). Falling back to in-memory.")
+            Logger(subsystem: "com.darit.Teleprompter", category: "App")
+                .error("Failed to create persistent store: \(error.localizedDescription). Falling back to in-memory.")
             let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
             do {
                 modelContainer = try ModelContainer(

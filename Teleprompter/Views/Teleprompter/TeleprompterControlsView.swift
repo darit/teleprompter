@@ -149,7 +149,7 @@ struct TeleprompterControlsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .glassEffect(.regular.interactive(), in: .rect)
     }
 
     private func shortcutLabel(_ text: String) -> some View {

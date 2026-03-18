@@ -29,7 +29,7 @@ struct TeleprompterContentView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
+            .glassEffect(.regular.interactive(), in: .rect)
 
             Divider()
 
