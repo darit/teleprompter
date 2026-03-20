@@ -553,11 +553,11 @@ struct TeleprompterTextView: View {
     // MARK: - Stage direction definitions
 
     private static let knownDirections: [(pattern: String, icon: String, baseDuration: Double)] = [
-        ("[PAUSE]", "pause.fill", 2.0),
-        ("[SLOW]", "tortoise.fill", 1.0),
+        ("[PAUSE]", "pause.fill", 2.5),
+        ("[SLOW]", "tortoise.fill", 1.5),
         ("[LOOK AT CAMERA]", "eye.fill", 2.0),
         ("[SHOW SLIDE]", "rectangle.on.rectangle.angled", 1.5),
-        ("[BREATHE]", "wind", 3.0),
+        ("[BREATHE]", "wind", 2.5),
     ]
 
     private static func parseDirection(_ text: String) -> (info: DirectionInfo, baseDuration: Double)? {
@@ -584,19 +584,25 @@ struct TeleprompterTextView: View {
         let paragraphs = content.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !paragraphs.isEmpty else { return nil }
 
-        // Pause durations based on speech corpus research.
-        // All scale proportionally with word duration (basePause = secondsPerWord).
+        // Pause durations from speech prosody research (BYU corpus, Frontiers
+        // in Psychology 2022).  Key findings:  period pauses ≈ 2× comma pauses;
+        // paragraph breaks ≈ 2× sentence-end pauses; optimal naturalness at
+        // 0.6 s within-sentence and 0.6-1.2 s between sentences.
+        //
+        // Each pause uses max(floor, scaled) so pauses never become
+        // imperceptibly short at high WPM.
         let secondsPerWord = 60.0 / max(60, wpm)
-        let basePause = secondsPerWord
-        let commaPause      = basePause * 0.5    // ~0.2s at 150 WPM
-        let semicolonPause   = basePause * 0.7    // ~0.28s
-        let colonPause       = basePause * 0.85   // ~0.34s
-        let periodPause      = basePause * 1.0    // ~0.4s
-        let questionPause    = basePause * 1.0
-        let exclamationPause = basePause * 0.9    // slightly shorter, more energetic
-        let ellipsisPause    = basePause * 1.5    // ~0.6s, deliberate thinking pause
-        let dashPause        = basePause * 0.35   // ~0.14s, brief structural pause
-        let breathPause      = periodPause * 1.5  // paragraph boundary ~1.5x sentence
+
+        let commaPause       = max(0.25, secondsPerWord * 0.75)  // ~0.30s @150 WPM
+        let semicolonPause   = max(0.30, secondsPerWord * 1.0)   // ~0.40s
+        let colonPause       = max(0.35, secondsPerWord * 1.1)   // ~0.44s
+        let dashPause        = max(0.20, secondsPerWord * 0.60)  // ~0.24s em-dash
+        let periodPause      = max(0.45, secondsPerWord * 1.5)   // ~0.60s
+        let questionPause    = max(0.50, secondsPerWord * 1.6)   // ~0.64s, lands the question
+        let exclamationPause = max(0.40, secondsPerWord * 1.3)   // ~0.52s, energetic but clear
+        let ellipsisPause    = max(0.60, secondsPerWord * 2.0)   // ~0.80s, deliberate thinking
+        let sentenceGap      = max(0.25, secondsPerWord * 0.8)   // extra gap between sentences within a paragraph
+        let breathPause      = max(0.80, periodPause * 2.0)      // ~1.20s paragraph boundary
         let speedFactor = 120.0 / max(60, wpm)    // for stage direction scaling
         let endOfSlideDwell = transitionDwell
 
@@ -658,30 +664,48 @@ struct TeleprompterTextView: View {
 
                     // Punctuation pauses (research-backed hierarchy)
                     let stripped = word.trimmingCharacters(in: .init(charactersIn: "\"'*)]}"))
+                    let isSentenceEnder: Bool
                     if stripped.hasSuffix("...") || stripped.hasSuffix("\u{2026}") {
                         currentTime += ellipsisPause
+                        isSentenceEnder = true
                     } else if stripped.hasSuffix("?") {
                         currentTime += questionPause
+                        isSentenceEnder = true
                     } else if stripped.hasSuffix("!") {
                         currentTime += exclamationPause
+                        isSentenceEnder = true
                     } else if stripped.hasSuffix(".") {
                         currentTime += periodPause
+                        isSentenceEnder = true
                     } else if stripped.hasSuffix(":") {
                         currentTime += colonPause
+                        isSentenceEnder = false
                     } else if stripped.hasSuffix(";") {
                         currentTime += semicolonPause
+                        isSentenceEnder = false
                     } else if stripped.hasSuffix(",") {
                         currentTime += commaPause
+                        isSentenceEnder = false
                     } else if stripped.hasSuffix("--") || stripped.hasSuffix("\u{2014}") {
                         currentTime += dashPause
+                        isSentenceEnder = false
+                    } else {
+                        isSentenceEnder = false
+                    }
+
+                    // Extra inter-sentence gap when a sentence ends mid-paragraph
+                    // (lets the reader mentally close one thought before starting the next)
+                    if isSentenceEnder && word != mergedWords.last {
+                        currentTime += sentenceGap
                     }
                 }
             }
 
-            let isSentenceEnd = trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?")
             let isLast = pIdx == paragraphs.count - 1
 
-            if !isLast && isSentenceEnd {
+            // Every paragraph boundary gets a breath pause — a new paragraph
+            // always signals a thought break, whether or not it ends with punctuation.
+            if !isLast {
                 currentTime += breathPause
             }
         }
